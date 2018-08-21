@@ -1,6 +1,9 @@
 pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
+-- picobricks alpha
+-- by jellycat
+-- 0.4.0
 local ball, pad, bricks, lives, score, scene
 
 function _init()
@@ -13,9 +16,10 @@ function start()
   ball = make_ball()
   pad = make_pad()
   
-  local brick_size = 13
+  local brick_w = 9
+  local brick_h = 4
   bricks = {}
-  build_bricks(8, brick_size)
+  build_bricks(11, 6, brick_w, brick_h, 4)
 
   scene = "game"
   serve_ball()
@@ -33,9 +37,11 @@ function serve_ball()
   ball.vy = 1
 end
 
-function build_bricks(n, w)
-  for i=1,n do
-    add(bricks, make_brick(8 + (i - 1) * (w + 1), 20, 12, 4))
+function build_bricks(c, l, w, h, color)
+  for line = 1,l do
+    for col = 1,c do
+      add(bricks, make_brick(4 + (col - 1) * (w + 2), 20 + (line - 1) * (h + 2), w, h, color))
+    end
   end
 end
 
@@ -77,7 +83,7 @@ function _draw()
 end
 
 function draw_game()
-  cls(1)
+  cls(0)
   rectfill(0, 0, 127, 7, 0)
   for i=1,lives do print("♥", 4 + 8*i - 8, 2, 8) end
   print("score: "..score, 72, 2, 6)
@@ -90,7 +96,7 @@ end
 
 function draw_start()
   local title = "picobricks"
-  local subtitle = "alpha version 0.3.0" 
+  local subtitle = "alpha version" 
   local cta = "press ❎ to start"
   cls(0)
   for i=1,50 do
@@ -255,13 +261,13 @@ function make_pad()
   return pad
 end
 
-function make_brick(x, y, w, h)
+function make_brick(x, y, w, h, c)
   local brick = {
     x = x,
     y = y,
     w = w,
     h = h,
-    c = 14,
+    c = c,
     v = true,
 
     update = function(self)
@@ -274,7 +280,6 @@ function make_brick(x, y, w, h)
 
   return brick
 end
-
 __sfx__
 010100001836018360183501833018320183100030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 010100002436024360243502433024320243100030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
