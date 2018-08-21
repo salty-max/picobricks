@@ -19,7 +19,7 @@ function _init()
   ray = {
     x = 0,
     y = 0,
-    vx = 2,
+    vx = -2,
     vy = -2
   }
 end
@@ -60,78 +60,39 @@ function _draw()
   print(debug)
 end
 
--- function hit_ballbox(bx,by,tx,ty,tw,th)
---  if bx+ball_r < tx then return false end
---  if by+ball_r < ty then return false end
---  if bx-ball_r > tx+tw then return false end
---  if by-ball_r > ty+th then return false end
---  return true
--- end
-
 function deflect(ball, target)
   -- calculate whether to deflect the ball
   -- horizontally and or vertical when it hits a box
+
+  -- calculate the slope
+  local slp = ball.vy / ball.vx
+  local cx, cy
+
   if ball.vx == 0 then
-    -- moving vertically
-    return false
+      -- moving vertically
+      return false
   elseif ball.vy == 0 then
-    -- moving horizontally
-    return true
-  else
-    -- moving diagonally
-    -- calculate slope
-    local slp = ball.vx / ball.vy
-    local cx, cy
-    --check variants
-    if slp > 0 and ball.vx > 0 then
-      -- moving down right
+      -- moving horizontally
+      return true
+  elseif slp > 0 and ball.vx > 0 then
       debug = "dr"
       cx = target.x - ball.x
       cy = target.y - ball.y
-      if cx <= 0 then
-        return false
-      elseif cy / cx < slp then
-        return true
-      else
-        return false
-      end
-    elseif slp < 0 and ball.vx > 0 then
-      -- moving up right
-      debug = "ur"
+      return cx > 0 and cy/cx < slp
+  elseif slp < 0 and ball.vx > 0 then
+      debug = "ur" 
       cx = target.x - ball.x
       cy = target.y + target.h - ball.y
-      if cx <= 0 then
-        return false
-      elseif cy / cx < slp then
-        return false
-      else
-        return true
-      end
-    elseif slp > 0 and ball.vx < 0 then
-      -- moving up left
+      return cx > 0 and cy/cx >= slp
+  elseif slp > 0 and ball.vx < 0 then
       debug = "ul"
       cx = target.x + target.w - ball.x
       cy = target.y + target.h - ball.y
-      if cx >= 0 then
-        return false
-      elseif cy / cx > slp then
-        return false
-      else
-        return true
-      end
-    else
-      -- moving down left
+      return cx < 0 and cy/cx <= slp
+  else
       debug = "dl"
       cx = target.x + target.w - ball.x
       cy = target.y - ball.y
-      if cx >= 0 then
-        return false
-      elseif cy / cx < slp then
-        return false
-      else
-        return true
-      end
-    end
+      return cx < 0 and cy/cx >= slp
   end
-  return false
 end

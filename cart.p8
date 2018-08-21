@@ -1,7 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
-local ball, pad, lives, score, scene
+local ball, pad, bricks, lives, score, scene
 
 function _init()
   scene = "start"
@@ -12,6 +12,11 @@ function start()
   score = 0
   ball = make_ball()
   pad = make_pad()
+  
+  local brick_size = 13
+  bricks = {}
+  build_bricks(8, brick_size)
+
   scene = "game"
   serve_ball()
 end
@@ -22,10 +27,16 @@ function gameover()
 end
 
 function serve_ball()
-  ball.x = 5
-  ball.y = 30
+  ball.x = 8
+  ball.y = 32
   ball.vx = 1
   ball.vy = 1
+end
+
+function build_bricks(n, w)
+  for i=1,n do
+    add(bricks, make_brick(8 + (i - 1) * (w + 1), 20, 12, 4))
+  end
 end
 
 function _update60()
@@ -41,6 +52,10 @@ end
 function update_game()
   ball:update()
   pad:update()
+
+  for brick in all(bricks) do
+    brick:update()
+  end
 end
 
 function update_start()
@@ -68,6 +83,9 @@ function draw_game()
   print("score: "..score, 72, 2, 6)
   ball:draw()
   pad:draw()  
+  for brick in all(bricks) do
+    brick:draw()
+  end
 end
 
 function draw_start()
@@ -129,8 +147,24 @@ function make_ball()
         else
           ball.vy = -ball.vy
         end
-
+        score += 10
         sfx(1)
+      end
+
+      for brick in all(bricks) do 
+        if brick.v and self:collide(nextx, nexty, brick) then
+          -- check if ball hits pad
+          -- find out which direction ball will deflect
+          if self:deflect(brick) then
+            ball.vx = -ball.vx
+          else
+            ball.vy = -ball.vy
+          end
+
+          brick.v = false
+          sfx(3)
+          score += 100
+        end
       end
 
       ball.x = nextx
@@ -161,71 +195,29 @@ function make_ball()
     end,
 
     deflect = function(self, target)
-      -- calculate whether to deflect the ball
-      -- horizontally and or vertical when it hits a box
+      local slp = self.vy / self.vx
+      local cx, cy
       if self.vx == 0 then
-        -- moving vertically
-        return false
+          return false
       elseif self.vy == 0 then
-        -- moving horizontally
-        return true
+          return true
+      elseif slp > 0 and self.vx > 0 then
+          cx = target.x - self.x
+          cy = target.y - self.y
+          return cx > 0 and cy/cx < slp
+      elseif slp < 0 and self.vx > 0 then
+          cx = target.x - self.x
+          cy = target.y + target.h - self.y
+          return cx > 0 and cy/cx >= slp
+      elseif slp > 0 and self.vx < 0 then
+          cx = target.x + target.w - self.x
+          cy = target.y + target.h - self.y
+          return cx < 0 and cy/cx <= slp
       else
-        -- moving diagonally
-        -- calculate slope
-        local slp = self.vx / self.vy
-        local cx, cy
-        --check variants
-        if slp > 0 and self.vx > 0 then
-          -- moving down right
-          debug = "dr"
-          cx = target.x - self.x
-          cy = target.y - self.y
-          if cx <= 0 then
-            return false
-          elseif cy / cx < slp then
-            return true
-          else
-            return false
-          end
-        elseif slp < 0 and self.vx > 0 then
-          -- moving up right
-          debug = "ur"
-          cx = target.x - self.x
-          cy = target.y + target.h - self.y
-          if cx <= 0 then
-            return false
-          elseif cy / cx < slp then
-            return false
-          else
-            return true
-          end
-        elseif slp > 0 and self.vx < 0 then
-          -- moving up left
-          debug = "ul"
-          cx = target.x + target.w - self.x
-          cy = target.y + target.h - self.y
-          if cx >= 0 then
-            return false
-          elseif cy / cx > slp then
-            return false
-          else
-            return true
-          end
-        else
-          -- moving down left
-          debug = "dl"
           cx = target.x + target.w - self.x
           cy = target.y - self.y
-          if cx >= 0 then
-            return false
-          elseif cy / cx < slp then
-            return false
-          else
-            return true
-          end
-        end
+          return cx < 0 and cy/cx >= slp
       end
-      return false
     end
   }
 
@@ -243,15 +235,16 @@ function make_pad()
     c = 6,
 
     update = function(self)
-      if btn(0) and self.x > 0 then
+      if btn(0) then
         self.vx = -self.s
       end
-      if btn(1) and self.x + self.w < 127 then
+      if btn(1) then
         self.vx = self.s
       end
-      self.vx *= 0.8
+      self.vx *= 0.85
 
       self.x += self.vx
+      self.x = mid(0, self.x, 127 - self.w)
     end,
 
     draw = function(self)
@@ -262,11 +255,31 @@ function make_pad()
   return pad
 end
 
+function make_brick(x, y, w, h)
+  local brick = {
+    x = x,
+    y = y,
+    w = w,
+    h = h,
+    c = 14,
+    v = true,
+
+    update = function(self)
+    end,
+
+    draw = function(self)
+      if (self.v) rectfill(self.x, self.y, self.x + self.w, self.y + self.h, self.c)
+    end
+  }
+
+  return brick
+end
+
 __sfx__
 010100001836018360183501833018320183100030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 010100002436024360243502433024320243100030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 01080000155651356511555105550e5450c5450b53509531095210951109511000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010100003036030360303503033030320303100030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
