@@ -1,19 +1,20 @@
 pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
-local ball
-local pad
+local ball, pad, lives
 
 function _init()
+  lives = 3
+
   ball = {
     x = 62,
     y = 62,
-    vx = 4,
-    vy = 2,
+    vx = 2,
+    vy = 1,
     w = 4,
     h = 4,
     r = 2,
-    dr = 0.5,
+    --dr = 0.5,
     c = 10,
 
     update = function(self)
@@ -141,13 +142,14 @@ function _init()
     c = 6,
 
     update = function(self)
-      if btn(0) then
+      if btn(0) and self.x > 0 then
         self.vx = -self.s
       end
-      if btn(1) then
+      if btn(1) and self.x + self.w < 127 then
         self.vx = self.s
       end
       self.vx *= 0.75
+
       self.x += self.vx
     end,
 
@@ -157,14 +159,15 @@ function _init()
   }
 end
 
-function _update()
+function _update60()
   ball:update()
   pad:update()
 end
 
 function _draw()
   cls(1)
-  print("fps: "..stat(7), 4, 4, 7)
+  print("fps: "..stat(7))
+  for i=1,lives do print("♥", 8*i, 4, 8) end
   ball:draw()
   pad:draw()  
 end
