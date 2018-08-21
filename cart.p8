@@ -4,6 +4,17 @@ __lua__
 -- picobricks alpha
 -- by jellycat
 -- 0.4.0
+
+-- TODO
+-- 1. sticky paddle
+-- 2. angle control
+-- 3. combos
+-- 4. levels
+-- 5. different bricks
+-- 6. power ups
+-- 7. more juicyness (particles + screen shake)
+-- 8. high score
+
 local ball, pad, bricks, lives, score, scene
 
 function _init()
@@ -31,8 +42,8 @@ function gameover()
 end
 
 function serve_ball()
-  ball.x = 8
-  ball.y = 32
+  ball.x = 16
+  ball.y = 72
   ball.vx = 1
   ball.vy = 1
 end
@@ -118,8 +129,8 @@ end
 
 function make_ball()
   local ball = {
-    x = 5,
-    y = 30,
+    x = 16,
+    y = 72,
     vx = 1,
     vy = 1,
     w = 4,
@@ -149,32 +160,46 @@ function make_ball()
         -- check if ball hits pad
         -- find out which direction ball will deflect
         if self:deflect(pad) then
-          ball.vx = -ball.vx
+          self.vx = -self.vx
+          if self.x < pad.x + pad.w / 2 then
+            nextx = pad.x - self.r
+          else
+            nextx = pad.x + pad.w + self.r
+          end
         else
-          ball.vy = -ball.vy
+          self.vy = -self.vy
+          if ball.y > pad.y then
+            nexty = pad.y + pad.h + self.r
+          else
+            nexty = pad.y - self.r
+          end
         end
         score += 10
         sfx(1)
       end
 
+      local brick_hit = false
       for brick in all(bricks) do 
         if brick.v and self:collide(nextx, nexty, brick) then
           -- check if ball hits pad
           -- find out which direction ball will deflect
-          if self:deflect(brick) then
-            ball.vx = -ball.vx
-          else
-            ball.vy = -ball.vy
+          if not brick_hit then
+            if  self:deflect(brick) then
+              self.vx = -self.vx
+            else
+              self.vy = -self.vy
+            end
           end
 
+          brick_hit = true
           brick.v = false
           sfx(3)
           score += 100
         end
       end
 
-      ball.x = nextx
-      ball.y = nexty
+      self.x = nextx
+      self.y = nexty
 
       if self.y > 127 then
         if lives <= 1 then
