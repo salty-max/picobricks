@@ -10,9 +10,44 @@ function _init()
     y = 62,
     vx = 4,
     vy = 2,
+    w = 4,
+    h = 4,
     r = 2,
     dr = 0.5,
-    c = 7
+    c = 10,
+
+    update = function(self)
+      self.x += self.vx
+      self.y += self.vy
+
+      if self.x <= 0  or self.x >= 127 then
+        self.vx = -self.vx
+        sfx(0)
+      end
+      if self.y <= 0 or self.y >= 127 then 
+        self.vy = -self.vy
+        sfx(0)
+      end
+
+      if self:collide(pad) then
+        pad.c = 8
+      else
+        pad.c = 7
+      end
+    end,
+
+    draw = function(self)
+      circfill(self.x, self.y, self.r, self.c)
+    end,
+
+    collide = function(self, other)
+      if (self.y - self.r > other.y + other.h) return false -- top
+      if (self.y + self.r < other.y) return false -- bottom
+      if (self.x - self.r > other.x + other.w) return false -- left
+      if (self.x + self.r < other.x) return false -- right
+
+      return true
+    end
   }
 
   pad = {
@@ -22,38 +57,35 @@ function _init()
     w = 24,
     h = 3,
     s = 5,
-    c = 8
+    c = 6,
+
+    update = function(self)
+      if btn(0) then
+        self.vx = -self.s
+      end
+      if btn(1) then
+        self.vx = self.s
+      end
+      self.vx *= 0.75
+      self.x += self.vx
+    end,
+
+    draw = function(self)
+      rectfill(self.x, self.y, self.x + self.w, self.y + self.h, self.c)
+    end
   }
 end
 
 function _update()
-  ball.x += ball.vx
-  ball.y += ball.vy
-
-  if btn(0) then
-    pad.vx = -pad.s
-  end
-  if btn(1) then
-    pad.vx = pad.s
-  end
-  pad.vx *= 0.75
-  pad.x += pad.vx
-
-  if ball.x <= 0 or ball.x >= 127 then
-    ball.vx = -ball.vx
-    sfx(0)
-  end
-  if ball.y <= 0 or ball.y >= 127 then 
-    ball.vy = -ball.vy
-    sfx(0)
-  end
+  ball:update()
+  pad:update()
 end
 
 function _draw()
   cls(1)
   print("fps: "..stat(7), 4, 4, 7)
-  rectfill(pad.x, pad.y, pad.x + pad.w, pad.y + pad.h, pad.c)
-  circfill(ball.x, ball.y, ball.r, ball.c)
+  ball:draw()
+  pad:draw()  
 end
 
 __sfx__
