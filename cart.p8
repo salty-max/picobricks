@@ -17,36 +17,117 @@ function _init()
     c = 10,
 
     update = function(self)
-      self.x += self.vx
-      self.y += self.vy
+      local nextx, nexty
 
-      if self.x <= 0  or self.x >= 127 then
+      nextx = self.x + self.vx
+      nexty = self.y + self.vy
+
+      if nextx <= 0  or nextx >= 127 then
+        nextx = mid(0, nextx, 127)
         self.vx = -self.vx
         sfx(0)
       end
-      if self.y <= 0 or self.y >= 127 then 
+      if nexty <= 0 or nexty >= 127 then 
+        nexty = mid(0, nexty, 127)
         self.vy = -self.vy
         sfx(0)
       end
 
-      if self:collide(pad) then
-        pad.c = 8
-      else
-        pad.c = 7
+      if self:collide(nextx, nexty, pad) then
+        -- check if ball hits pad
+        -- find out which direction ball will deflect
+        if self:deflect(pad) then
+          ball.vx = -ball.vx
+        else
+          ball.vy = -ball.vy
+        end
+
+        sfx(1)
       end
+
+      ball.x = nextx
+      ball.y = nexty
     end,
 
     draw = function(self)
       circfill(self.x, self.y, self.r, self.c)
     end,
 
-    collide = function(self, other)
-      if (self.y - self.r > other.y + other.h) return false -- top
-      if (self.y + self.r < other.y) return false -- bottom
-      if (self.x - self.r > other.x + other.w) return false -- left
-      if (self.x + self.r < other.x) return false -- right
+    collide = function(self, nextx, nexty, other)
+      if (nexty - self.r > other.y + other.h) return false -- top
+      if (nexty + self.r < other.y) return false -- bottom
+      if (nextx - self.r > other.x + other.w) return false -- left
+      if (nextx + self.r < other.x) return false -- right
 
       return true
+    end,
+
+    deflect = function(self, target)
+      -- calculate whether to deflect the ball
+      -- horizontally and or vertical when it hits a box
+      if self.vx == 0 then
+        -- moving vertically
+        return false
+      elseif self.vy == 0 then
+        -- moving horizontally
+        return true
+      else
+        -- moving diagonally
+        -- calculate slope
+        local slp = self.vx / self.vy
+        local cx, cy
+        --check variants
+        if slp > 0 and self.vx > 0 then
+          -- moving down right
+          debug = "dr"
+          cx = target.x - self.x
+          cy = target.y - self.y
+          if cx <= 0 then
+            return false
+          elseif cy / cx < slp then
+            return true
+          else
+            return false
+          end
+        elseif slp < 0 and self.vx > 0 then
+          -- moving up right
+          debug = "ur"
+          cx = target.x - self.x
+          cy = target.y + target.h - self.y
+          if cx <= 0 then
+            return false
+          elseif cy / cx < slp then
+            return false
+          else
+            return true
+          end
+        elseif slp > 0 and self.vx < 0 then
+          -- moving up left
+          debug = "ul"
+          cx = target.x + target.w - self.x
+          cy = target.y + target.h - self.y
+          if cx >= 0 then
+            return false
+          elseif cy / cx > slp then
+            return false
+          else
+            return true
+          end
+        else
+          -- moving down left
+          debug = "dl"
+          cx = target.x + target.w - self.x
+          cy = target.y - self.y
+          if cx >= 0 then
+            return false
+          elseif cy / cx < slp then
+            return false
+          else
+            return true
+          end
+        end
+      end
+      return false
     end
   }
 
@@ -89,4 +170,5 @@ function _draw()
 end
 
 __sfx__
-000100001834018340183301832018310000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010100001836018360183501833018320183100030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
+010100002436024360243502433024320243100030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
