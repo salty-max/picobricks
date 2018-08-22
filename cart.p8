@@ -8,6 +8,8 @@ __lua__
 -- todo
 -- 3. combos
 -- 4. levels
+--      end of level detection
+--      next level screen
 --      stage clearing
 -- 5. different bricks
 -- 6. power ups
@@ -20,27 +22,40 @@ __lua__
 -- 8. high score
 -- 9. timer
 
-local ball, pad, bricks, lives, score, chain, level, scene, debug
+local ball, pad, bricks, lives, score, chain, levels, level, scene, debug
 
 function _init()
   scene = "start"
   debug = ""
+
+  levels = {
+    "b9b/b9b/b9b",
+    "b3xb2xb3/xbx2b2x2bx,xbx2b2x2bx,b3xb2xb3",
+    "x6b"
+  }
+  level = 1
+  lives = 3
+  score = 0
 end
 
 function start()
-  lives = 3
-  score = 0
-  chain = 1
-  level = "b9b/b9b/b9b"
-  ball = make_ball()
-  pad = make_pad()
   local brick_w = 9
   local brick_h = 4
-  bricks = {}
-  build_bricks(level, brick_w, brick_h)
-
+  
   scene = "game"
+  bricks = {}
+  chain = 1
+
+  ball = make_ball()
+  pad = make_pad()
+  build_bricks(levels[level], brick_w, brick_h)
+
   serve_ball()
+end
+
+function nextlevel()
+  level += 1
+  start()
 end
 
 function gameover()
@@ -68,7 +83,7 @@ function build_bricks(lvl, w, h)
     chr = sub(lvl, i, i)
     if chr == "b" then
       last = "b"
-      set_brick(last, j, w, h, color)
+      set_brick(last, j, w, h)
     elseif chr == "x" then
       last = "x"
     elseif chr == '/' then
@@ -83,7 +98,7 @@ function build_bricks(lvl, w, h)
   end
 end
 
-function set_brick(type, n, w, h, color)
+function set_brick(type, n, w, h)
   if type == "b" then
     add(bricks, make_brick(9 + ((n - 1) % 11) * (w + 2), 20 + flr((n - 1) / 11) * (h + 2), w, h, 14))
   elseif type == "x" then
@@ -98,6 +113,8 @@ function _update60()
     update_start()
   elseif scene == "gameover" then
     update_gameover()
+  elseif scene == "levelend" then
+    update_levelend()
   end
 end
 
@@ -108,6 +125,17 @@ function update_game()
   for brick in all(bricks) do
     brick:update()
   end
+
+  if (#bricks < 1) then 
+    
+    if level == #levels then
+      -- TODO
+      -- Nice end game screen
+      scene = "start"
+    else
+      scene = "levelend"
+    end
+  end
 end
 
 function update_start()
@@ -115,7 +143,11 @@ function update_start()
 end
 
 function update_gameover()
-  if (btn(5)) _init()
+  if (btn(5)) scene = "start"
+end
+
+function update_levelend()
+  if (btn(5)) nextlevel()
 end
 
 function _draw()
@@ -125,6 +157,8 @@ function _draw()
     draw_start()
   elseif scene == "gameover" then
     draw_gameover()
+  elseif scene == "levelend" then
+    draw_levelend()
   end
 end
 
@@ -160,6 +194,17 @@ function draw_gameover()
   rectfill(-8, 30, 128, 72, 0)
   rect(-8, 30, 128, 72, 6)
   print(go_text, 64 - (#go_text / 2) * 4, 38, 8)
+  print(cta, 64 - (#cta / 2) * 4, 60, 6)
+end
+
+function draw_levelend()
+  local lo_text = "stage clear !"
+  local cta = "press ❎ to proceed to continue"
+  local score_text = "your score: "..score
+  rectfill(-8, 30, 128, 72, 0)
+  rect(-8, 30, 128, 72, 6)
+  print(lo_text, 64 - (#lo_text / 2) * 4, 38, 11)
+  print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
   print(cta, 64 - (#cta / 2) * 4, 60, 6)
 end
 
@@ -273,7 +318,7 @@ function make_ball()
             end
 
             brick_hit = true
-            brick.v = false
+            del(bricks, brick)
             sfx(3 + (chain - 1))
             score += 100 * chain
             chain += 1
@@ -403,7 +448,7 @@ function make_brick(x, y, w, h, c)
     end,
 
     draw = function(self)
-      if (self.v) rectfill(self.x, self.y, self.x + self.w, self.y + self.h, self.c)
+      rectfill(self.x, self.y, self.x + self.w, self.y + self.h, self.c)
     end
   }
 
