@@ -6,7 +6,6 @@ __lua__
 -- 0.4.0
 
 -- TODO
--- 2. angle control
 -- 3. combos
 -- 4. levels
 -- 5. different bricks
@@ -49,6 +48,7 @@ function serve_ball()
   ball.y = pad.y - ball.r
   ball.vx = 1
   ball.vy = -1
+  ball.a = 1
   ball.sticky = true
 end
 
@@ -103,6 +103,7 @@ function draw_game()
   for i=1,lives do print("♥", 4 + 8*i - 8, 2, 8) end
   print("score: "..score, 72, 2, 6)
   ball:draw()
+  print(ball.a, ball.x + 10, ball.y, 7)
   pad:draw()  
   for brick in all(bricks) do
     brick:draw()
@@ -137,6 +138,7 @@ function make_ball()
     y = 72,
     vx = 1,
     vy = 1,
+    a = 1,
     w = 4,
     h = 4,
     r = 2,
@@ -173,6 +175,7 @@ function make_ball()
           -- check if ball hits pad
           -- find out which direction ball will deflect
           if self:deflect(pad) then
+            -- ball hits paddle sideways
             self.vx = -self.vx
             if self.x < pad.x + pad.w / 2 then
               nextx = pad.x - self.r
@@ -180,11 +183,26 @@ function make_ball()
               nextx = pad.x + pad.w + self.r
             end
           else
+            -- ball hits paddle on top / bottom
             self.vy = -self.vy
             if ball.y > pad.y then
+              -- bottom
               nexty = pad.y + pad.h + self.r
             else
+              -- top
               nexty = pad.y - self.r
+
+              if abs(pad.vx) > 2 then
+                -- change angle
+                if sgn(self.vx) == sgn(pad.vx) then
+                  -- flatten angle
+                  self:set_angle(mid(0, self.a - 1, 2))
+                else
+                  -- raise angle
+                  if (self.a == 2) self.vx = -self.vx
+                  self:set_angle(mid(0, self.a + 1, 2))  
+                end
+              end
             end
           end
           score += 10
@@ -265,6 +283,21 @@ function make_ball()
           cx = target.x + target.w - self.x
           cy = target.y - self.y
           return cx < 0 and cy/cx >= slp
+      end
+    end,
+
+    set_angle = function(self, a)
+      self.a = a
+
+      if a == 2 then
+        self.vx = 0.50 * sgn(self.vx)
+        self.vy = 1.30 * sgn(self.vy)
+      elseif a == 0 then
+        self.vx = 1.30 * sgn(self.vx)
+        self.vy = 0.50 * sgn(self.vy)
+      else
+        self.vx = 1 * sgn(self.vx)
+        self.vx = 1 * sgn(self.vx)
       end
     end
   }
