@@ -8,6 +8,7 @@ __lua__
 -- todo
 -- 3. combos
 -- 4. levels
+--      stage clearing
 -- 5. different bricks
 -- 6. power ups
 -- 7. more juicyness
@@ -19,22 +20,24 @@ __lua__
 -- 8. high score
 -- 9. timer
 
-local ball, pad, bricks, lives, score, chain, scene
+local ball, pad, bricks, lives, score, chain, level, scene, debug
 
 function _init()
   scene = "start"
+  debug = ""
 end
 
 function start()
   lives = 3
   score = 0
   chain = 1
+  level = "b9b/b9b/b9b"
   ball = make_ball()
   pad = make_pad()
   local brick_w = 9
   local brick_h = 4
   bricks = {}
-  build_bricks(11, 6, brick_w, brick_h, 4)
+  build_bricks(level, brick_w, brick_h)
 
   scene = "game"
   serve_ball()
@@ -56,11 +59,35 @@ function serve_ball()
   chain = 1
 end
 
-function build_bricks(c, l, w, h, color)
-  for line = 1,l do
-    for col = 1,c do
-      add(bricks, make_brick(4 + (col - 1) * (w + 2), 20 + (line - 1) * (h + 2), w, h, color))
+function build_bricks(lvl, w, h)
+  local i, j, k, chr, last
+  j = 0
+
+  for i = 1,#lvl do
+    j += 1
+    chr = sub(lvl, i, i)
+    if chr == "b" then
+      last = "b"
+      set_brick(last, j, w, h, color)
+    elseif chr == "x" then
+      last = "x"
+    elseif chr == '/' then
+      j = (flr((j - 1) / 11) + 1) * 11
+    elseif chr >= "0" and chr <= "9" then
+      for k = 1,tonum(chr) - 1 do
+        set_brick(last, j, w, h)
+        j += 1
+      end
+      j -= 1
     end
+  end
+end
+
+function set_brick(type, n, w, h, color)
+  if type == "b" then
+    add(bricks, make_brick(9 + ((n - 1) % 11) * (w + 2), 20 + flr((n - 1) / 11) * (h + 2), w, h, 14))
+  elseif type == "x" then
+    -- do nothing
   end
 end
 
@@ -102,7 +129,8 @@ function _draw()
 end
 
 function draw_game()
-  cls(0)
+  cls(1)
+  if (debug != "") print(debug, 4, 120, 6)
   rectfill(0, 0, 127, 7, 0)
   for i=1,lives do print("♥", 4 + 8*i - 8, 2, 8) end
   handle_score()
