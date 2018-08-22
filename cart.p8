@@ -6,13 +6,16 @@ __lua__
 -- 0.4.0
 
 -- TODO
--- 1. sticky paddle
 -- 2. angle control
 -- 3. combos
 -- 4. levels
 -- 5. different bricks
 -- 6. power ups
--- 7. more juicyness (particles + screen shake)
+-- 7. more juicyness
+--      arrow animation
+--      text blinking
+--      particles
+--      screen shakes
 -- 8. high score
 
 local ball, pad, bricks, lives, score, scene
@@ -42,10 +45,11 @@ function gameover()
 end
 
 function serve_ball()
-  ball.x = 16
-  ball.y = 72
+  ball.x = pad.x + pad.w / 2
+  ball.y = pad.y - ball.r
   ball.vx = 1
-  ball.vy = 1
+  ball.vy = -1
+  ball.sticky = true
 end
 
 function build_bricks(c, l, w, h, color)
@@ -62,7 +66,7 @@ function _update60()
   elseif scene == "start" then
     update_start()
   elseif scene == "gameover" then
-  update_gameover()
+    update_gameover()
   end
 end
 
@@ -138,82 +142,95 @@ function make_ball()
     r = 2,
     --dr = 0.5,
     c = 10,
+    sticky = true,
 
     update = function(self)
       local nextx, nexty
 
-      nextx = self.x + self.vx
-      nexty = self.y + self.vy
-
-      if nextx <= 0  or nextx >= 127 then
-        nextx = mid(0, nextx, 127)
-        self.vx = -self.vx
-        sfx(0)
-      end
-      if nexty <= 8 + self.r then 
-        nexty = mid(0, nexty, 127)
-        self.vy = -self.vy
-        sfx(0)
+      if self.sticky and btnp(5) then
+        self.sticky = false
       end
 
-      if self:collide(nextx, nexty, pad) then
-        -- check if ball hits pad
-        -- find out which direction ball will deflect
-        if self:deflect(pad) then
+      if self.sticky then
+        ball.x = pad.x + pad.w / 2
+        ball.y = pad.y - ball.r - 1
+      else
+        nextx = self.x + self.vx
+        nexty = self.y + self.vy
+
+        if nextx <= 0  or nextx >= 127 then
+          nextx = mid(0, nextx, 127)
           self.vx = -self.vx
-          if self.x < pad.x + pad.w / 2 then
-            nextx = pad.x - self.r
-          else
-            nextx = pad.x + pad.w + self.r
-          end
-        else
-          self.vy = -self.vy
-          if ball.y > pad.y then
-            nexty = pad.y + pad.h + self.r
-          else
-            nexty = pad.y - self.r
-          end
+          sfx(0)
         end
-        score += 10
-        sfx(1)
-      end
+        if nexty <= 8 + self.r then 
+          nexty = mid(0, nexty, 127)
+          self.vy = -self.vy
+          sfx(0)
+        end
 
-      local brick_hit = false
-      for brick in all(bricks) do 
-        if brick.v and self:collide(nextx, nexty, brick) then
+        if self:collide(nextx, nexty, pad) then
           -- check if ball hits pad
           -- find out which direction ball will deflect
-          if not brick_hit then
-            if  self:deflect(brick) then
-              self.vx = -self.vx
+          if self:deflect(pad) then
+            self.vx = -self.vx
+            if self.x < pad.x + pad.w / 2 then
+              nextx = pad.x - self.r
             else
-              self.vy = -self.vy
+              nextx = pad.x + pad.w + self.r
+            end
+          else
+            self.vy = -self.vy
+            if ball.y > pad.y then
+              nexty = pad.y + pad.h + self.r
+            else
+              nexty = pad.y - self.r
             end
           end
-
-          brick_hit = true
-          brick.v = false
-          sfx(3)
-          score += 100
+          score += 10
+          sfx(1)
         end
-      end
 
-      self.x = nextx
-      self.y = nexty
+        local brick_hit = false
+        for brick in all(bricks) do 
+          if brick.v and self:collide(nextx, nexty, brick) then
+            -- check if ball hits pad
+            -- find out which direction ball will deflect
+            if not brick_hit then
+              if  self:deflect(brick) then
+                self.vx = -self.vx
+              else
+                self.vy = -self.vy
+              end
+            end
 
-      if self.y > 127 then
-        if lives <= 1 then
-          gameover()
-        else
-          lives -= 1
-          sfx(2)
-          serve_ball()
+            brick_hit = true
+            brick.v = false
+            sfx(3)
+            score += 100
+          end
+
+          self.x = nextx
+          self.y = nexty
+        end
+
+        if self.y > 127 then
+          if lives <= 1 then
+            gameover()
+          else
+            lives -= 1
+            sfx(2)
+            serve_ball()
+          end
         end
       end
     end,
 
     draw = function(self)
       circfill(self.x, self.y, self.r, self.c)
+
+      -- serve preview
+      if (self.sticky) line(self.x + self.vx * 4, self.y + self.vy * 4, self.x + self.vx * 8, self.y + self.vy * 8, 10)
     end,
 
     collide = function(self, nextx, nexty, other)
@@ -268,9 +285,11 @@ function make_pad()
     update = function(self)
       if btn(0) then
         self.vx = -self.s
+        if (ball.sticky) ball.vx = -1
       end
       if btn(1) then
         self.vx = self.s
+        if (ball.sticky) ball.vx = 1
       end
       self.vx *= 0.85
 
