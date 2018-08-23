@@ -36,11 +36,12 @@ function _init()
   debug = ""
 
   levels = {
+    "x5b1x5/s9s2",
     "b9b2/b9b2/b9b2",
     "b3xb3xb3/xbxxh1b1h1xxbx/xpxxh1s1h1xxpx/b1h1b1xb3xb1h1b1",
-    "x5b1x5/x4b3x4/x1i9"
+    "x5s1x5/x4b3x4/x1i9",
   }
-  level = 2
+  level = 1
   lives = 3
   score = 0
 end
@@ -48,17 +49,16 @@ end
 function start()
   local brick_w = 10
   local brick_h = 5
+  local brick_offset = 1
   
   scene = "game"
   bricks = {}
   chain = 1
+  score = 0
 
   ball = make_ball()
   pad = make_pad()
-  build_bricks(levels[level], brick_w, brick_h)
-  for brick in all(bricks) do
-    brick:set_type()
-  end
+  build_bricks(levels[level], brick_w, brick_h, brick_offset)
 
   serve_ball()
 end
@@ -84,36 +84,40 @@ function serve_ball()
   chain = 1
 end
 
-function build_bricks(lvl, w, h)
-  local i, j, k, chr, last
+function build_bricks(lvl, w, h, o)
+  local i, j, k, id, chr, last
   j = 0
+  id = 0
 
   for i = 1,#lvl do
     j += 1
+    id += 1
     chr = sub(lvl, i, i)
     if chr == "b" or chr == "h" or chr =="i" or chr == "s" or chr == "p" then
       last = chr
-      set_brick(chr, j, w, h)
+      set_brick(id, chr, j, w, h, o)
     elseif chr == "x" then
       last = "x"
     elseif chr == '/' then
       j = flr((j - 1) / 11) * 11
     elseif chr >= "0" and chr <= "9" then
       for k = 1,tonum(chr) - 1 do
-        set_brick(last, j, w, h)
+        set_brick(id, last, j, w, h, o)
         j += 1
+        id += 1
       end
       j -= 1
+      id -= 1
     end
     
   end
 end
 
-function set_brick(t, n, w, h)
+function set_brick(id, t, n, w, h, o)
   if t == "x" then
     -- do nothing
   else
-    add(bricks, make_brick(4 + ((n - 1) % 11) * (w + 1), 20 + flr((n - 1) / 11) * (h + 1), w, h, t))
+    add(bricks, make_brick(id, 4 + ((n - 1) % 11) * (w + o), 20 + flr((n - 1) / 11) * (h + o), w, h, t))
   end
 end
 
@@ -137,6 +141,7 @@ function update_game()
 
   for brick in all(bricks) do
     brick:update()
+    brick:set_type()
 
     if (brick.t != "i") add(dest_bricks, brick)
   end
@@ -214,7 +219,7 @@ end
 
 function draw_levelend()
   local lo_text = "stage clear !"
-  local cta = "press ❎ to proceed to continue"
+  local cta = "press ❎ to continue"
   local score_text = "your score: "..score
   rectfill(-8, 30, 128, 72, 0)
   rect(-8, 30, 128, 72, 6)
@@ -240,6 +245,60 @@ function handle_score()
   print("x"..chain, 60, 2, chain_color)
   -- score
   print("score: "..score, 72, 2, 6)
+end
+
+function hit_brick(b, combo)
+  if b.t == "b" then
+    sfx(3 + (chain - 1))
+    if combo then
+      score += b.pts * chain
+      chain += 1
+      chain = mid(1, chain, 8)
+    end
+    del(bricks, b)
+  elseif b.t == 's' then
+    b.t = "rex"
+    sfx(3 + (chain - 1))
+    if combo then
+      score += b.pts * chain
+      chain += 1
+      chain = mid(1, chain, 8)
+    end
+  elseif b.t == "h" then
+    b.t = "b"
+    sfx(3 + (chain - 1))
+  elseif b.t == "i" then
+    sfx(11)
+  elseif b.t == "p" then
+    sfx(3 + (chain - 1))
+    if combo then
+      score += b.pts * chain
+      chain += 1
+      chain = mid(1, chain, 8)
+    end
+    -- todo: powerups
+  end
+end
+
+function check_explosions()
+  for brick in all(bricks) do
+    if brick.t == "rex" then
+      brick.t = "ex"
+    elseif brick.t == "ex" then
+      explode_bricks(brick)
+    elseif brick.t == "rex" then
+      brick.t = "ex"
+    end 
+  end
+end
+
+function explode_bricks(b)
+  for brick in all(bricks) do
+    if brick.id != b.id and abs(brick.x - b.x) <= brick.w + 1 and abs(brick.y - b.y) <= brick.h + 1 then
+      hit_brick(brick, false)
+    end
+  end
+  del(bricks, b)
 end
 
 function make_ball()
@@ -348,12 +407,13 @@ function make_ball()
             end
 
             brick_hit = true
-            self:hit_brick(brick)
+            hit_brick(brick, true)
           end
 
           self.x = nextx
           self.y = nexty
         end
+
 
         if self.y > 127 then
           if lives <= 1 then
@@ -364,6 +424,8 @@ function make_ball()
             serve_ball()
           end
         end
+
+        check_explosions()
       end
     end,
 
@@ -423,21 +485,6 @@ function make_ball()
         self.vx = 1 * sgn(self.vx)
         self.vx = 1 * sgn(self.vx)
       end
-    end,
-
-    hit_brick = function(self, b)
-      if b.t != "i" then
-        b.hp -= 1
-        sfx(3 + (chain - 1))
-        score += b.pts * chain
-        chain += 1
-        chain = mid(1, chain, 8)
-      else
-        sfx(11)
-      end
-      if b.hp <= 0 then
-        del(bricks, b)
-      end
     end
   }
 
@@ -478,14 +525,15 @@ function make_pad()
   return pad
 end
 
-function make_brick(x, y, w, h, t)
+function make_brick(id, x, y, w, h, t)
   local brick = {
+    id = id,
     x = x,
     y = y,
     w = w,
     h = h,
     t = t,
-    hp = 0,
+    --hp = 0,
     c = 0,
     sx = 0,
     sy = 0,
@@ -498,30 +546,34 @@ function make_brick(x, y, w, h, t)
     draw = function(self)
       palt(0, false)
       sspr(self.sx, self.sy, self.w, self.h, self.x, self.y)
-      --rect(self.x, self.y, self.x + self.w, self.y + self.h, 8)
       palt()
     end,
 
     set_type = function(self)
       if self.t == "b" then
         self.sx = 8
-        self.hp = 1
+        self.c = 14
+        --self.hp = 1
         self.pts = 50
       elseif self.t == "h" then
         self.sx = 18
-        self.hp = 2
+        self.c = 12
+        --self.hp = 2
         self.pts = 100
       elseif self.t == "i" then
         self.sx = 48
-        self.hp = 1
+        self.c = 13
+        --self.hp = 1
         self.pts = 0
       elseif self.t == "s" then
         self.sx = 28
-        self.hp = 1
+        self.c = 9
+        --self.hp = 1
         self.pts = 300
       elseif self.t == "p" then
         self.sx = 38
-        self.hp = 1
+        self.c = 11
+        --self.hp = 1
         self.pts = 200
       end
     end
@@ -529,6 +581,7 @@ function make_brick(x, y, w, h, t)
 
   return brick
 end
+
 __gfx__
 00000000277777777717777777775aa55aa55a377777777757777777770000000000000000000000000000000000000000000000000000000000000000000000
 000000002eeeeeeee71cccccccc799009900993bbbbbbbb756dd66dd670000000000000000000000000000000000000000000000000000000000000000000000
