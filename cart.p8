@@ -1,10 +1,6 @@
 pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
--- picobricks alpha
--- by jellycat
--- 0.4.0
-
 -- todo
 -- 3. combos
 -- 4. levels
@@ -26,6 +22,13 @@ __lua__
 -- 8. high score
 -- 9. timer
 
+-- brick types
+-- b : regular
+-- h : hardened
+-- i : indestructible
+-- s : explosive
+-- p : powerup
+
 local ball, pad, bricks, lives, score, chain, levels, level, scene, debug
 
 function _init()
@@ -34,17 +37,17 @@ function _init()
 
   levels = {
     "b9b2/b9b2/b9b2",
-    "b3xb3xb3/xbxxh1b1h1xxbx/xbxxh1b1h1xxbx/b1h1b1xb3xb1h1b1",
-    "xxxxxxb"
+    "b3xb3xb3/xbxxh1b1h1xxbx/xpxxh1s1h1xxpx/b1h1b1xb3xb1h1b1",
+    "x5b1x5/x4b3x4/x1i9"
   }
-  level = 1
+  level = 2
   lives = 3
   score = 0
 end
 
 function start()
-  local brick_w = 8
-  local brick_h = 4
+  local brick_w = 10
+  local brick_h = 5
   
   scene = "game"
   bricks = {}
@@ -53,6 +56,9 @@ function start()
   ball = make_ball()
   pad = make_pad()
   build_bricks(levels[level], brick_w, brick_h)
+  for brick in all(bricks) do
+    brick:set_type()
+  end
 
   serve_ball()
 end
@@ -64,7 +70,7 @@ end
 
 function gameover()
   scene = "gameover"
-  sfx(11)
+  sfx(12)
 end
 
 function serve_ball()
@@ -85,12 +91,9 @@ function build_bricks(lvl, w, h)
   for i = 1,#lvl do
     j += 1
     chr = sub(lvl, i, i)
-    if chr == "b" then
-      last = "b"
-      set_brick(last, j, w, h)
-    elseif chr == "h" then
-      last = "h"
-      set_brick(last, j, w, h)
+    if chr == "b" or chr == "h" or chr =="i" or chr == "s" or chr == "p" then
+      last = chr
+      set_brick(chr, j, w, h)
     elseif chr == "x" then
       last = "x"
     elseif chr == '/' then
@@ -106,19 +109,11 @@ function build_bricks(lvl, w, h)
   end
 end
 
-function set_brick(type, n, w, h)
-  local bt
-  if type == "b" then
-    bt = "brick"
-  elseif type == "h" then
-    bt = "hardened"
-  elseif type == "x" then
+function set_brick(t, n, w, h)
+  if t == "x" then
     -- do nothing
-  end
-
-  add(bricks, make_brick(10 + ((n - 1) % 11) * (w + 2), 20 + flr((n - 1) / 11) * (h + 2), w, h, bt))
-  for brick in all(bricks) do
-    brick:set_type()
+  else
+    add(bricks, make_brick(4 + ((n - 1) % 11) * (w + 1), 20 + flr((n - 1) / 11) * (h + 1), w, h, t))
   end
 end
 
@@ -135,14 +130,18 @@ function _update60()
 end
 
 function update_game()
+  local dest_bricks = {}
+
   ball:update()
   pad:update()
 
   for brick in all(bricks) do
     brick:update()
+
+    if (brick.t != "i") add(dest_bricks, brick)
   end
 
-  if (#bricks < 1) then 
+  if (#dest_bricks < 1) then 
     
     if level == #levels then
       -- todo
@@ -297,7 +296,7 @@ function make_ball()
           else
             -- ball hits paddle on top / bottom
             self.vy = -self.vy
-            if ball.y > pad.y then
+            if self.y > pad.y then
               -- bottom
               nexty = pad.y + pad.h + self.r
             else
@@ -323,26 +322,33 @@ function make_ball()
 
         local brick_hit = false
         for brick in all(bricks) do 
-          if brick.v and self:collide(nextx, nexty, brick) then
-            -- check if ball hits pad
+          if self:collide(nextx, nexty, brick) then
+            -- check if ball hits brick
             -- find out which direction ball will deflect
             if not brick_hit then
-              if  self:deflect(brick) then
+              if self:deflect(brick) then
+                -- ball hits brick sideways
                 self.vx = -self.vx
+                if self.x < brick.x + brick.w / 2 then
+                  nextx = brick.x - self.r
+                else
+                  nextx = brick.x + brick.w + self.r
+                end
               else
+                -- ball hits brick on top / bottom
                 self.vy = -self.vy
+                if self.y > brick.y then
+                  -- bottom
+                  nexty = brick.y + brick.h + self.r
+                else
+                  -- top
+                  nexty = brick.y - self.r
+                end
               end
             end
 
             brick_hit = true
-            brick.hp -= 1
-            if brick.hp <= 0 then
-              del(bricks, brick)
-            end
-            sfx(3 + (chain - 1))
-            score += brick.pts * chain
-            chain += 1
-            chain = mid(1, chain, 8)
+            self:hit_brick(brick)
           end
 
           self.x = nextx
@@ -417,6 +423,21 @@ function make_ball()
         self.vx = 1 * sgn(self.vx)
         self.vx = 1 * sgn(self.vx)
       end
+    end,
+
+    hit_brick = function(self, b)
+      if b.t != "i" then
+        b.hp -= 1
+        sfx(3 + (chain - 1))
+        score += b.pts * chain
+        chain += 1
+        chain = mid(1, chain, 8)
+      else
+        sfx(11)
+      end
+      if b.hp <= 0 then
+        del(bricks, b)
+      end
     end
   }
 
@@ -457,35 +478,50 @@ function make_pad()
   return pad
 end
 
-function make_brick(x, y, w, h, type)
+function make_brick(x, y, w, h, t)
   local brick = {
     x = x,
     y = y,
     w = w,
     h = h,
-    type = type,
+    t = t,
     hp = 0,
     c = 0,
-    s = 0,
+    sx = 0,
+    sy = 0,
     pts = 0,
-    v = true,
+    --v = true,
 
     update = function(self)
     end,
 
     draw = function(self)
-      --rectfill(self.x, self.y, self.x + self.w, self.y + self.h, self.c)
-      spr(self.s, self.x, self.y)
+      palt(0, false)
+      sspr(self.sx, self.sy, self.w, self.h, self.x, self.y)
+      --rect(self.x, self.y, self.x + self.w, self.y + self.h, 8)
+      palt()
     end,
 
     set_type = function(self)
-      if self.type == "brick" then
-        self.s = 1
+      if self.t == "b" then
+        self.sx = 8
         self.hp = 1
-        self.pts = 100
-      elseif self.type == "hardened" then
-        self.s = 2
+        self.pts = 50
+      elseif self.t == "h" then
+        self.sx = 18
         self.hp = 2
+        self.pts = 100
+      elseif self.t == "i" then
+        self.sx = 48
+        self.hp = 1
+        self.pts = 0
+      elseif self.t == "s" then
+        self.sx = 28
+        self.hp = 1
+        self.pts = 300
+      elseif self.t == "p" then
+        self.sx = 38
+        self.hp = 1
         self.pts = 200
       end
     end
@@ -494,11 +530,11 @@ function make_brick(x, y, w, h, type)
   return brick
 end
 __gfx__
-00000000277777771777777709909909577777773777777700000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000002eeeeee71cccccc799099099566666673bbbbbb700000000000000000000000000000000000000000000000000000000000000000000000000000000
-007007002eeeeee71cccccc790990990566666673bbbbbb700000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000222222271111111709909909555555553333333300000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000277777777717777777775aa55aa55a377777777757777777770000000000000000000000000000000000000000000000000000000000000000000000
+000000002eeeeeeee71cccccccc799009900993bbbbbbbb756dd66dd670000000000000000000000000000000000000000000000000000000000000000000000
+007007002eeeeeeee71cccccccc790099009903bbbbbbbb75dd66dd6670000000000000000000000000000000000000000000000000000000000000000000000
+000770002eeeeeeee71cccccccc700990099003bbbbbbbb75d66dd66d70000000000000000000000000000000000000000000000000000000000000000000000
+00077000222222222711111111170440044004333333333755555555570000000000000000000000000000000000000000000000000000000000000000000000
 00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -516,7 +552,7 @@ aaa70000000000000000000000000000000000000000000000000000000000000000000000000000
 56655555555555555555566700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 05500000000000000000056000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __gff__
-0002020202020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0002020202020002020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 010100001836018360183501833018320183100030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
@@ -529,7 +565,8 @@ __sfx__
 000200003234038340383303832030300303000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 00020000343403a3403a3303a32030300303000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 00020000363403c3403c3303c32030300303000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
-00020000383403e3403e3303e32030300303000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
+01020000383403e3403e3303e32030300303000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
+000200003b5530c5020c5000c5000c5000c5000c5000c5000c5000c5020c5020c5000c50110501105000c5000e5000c5000e5020e5000e5010c5010c5000c5000c500005000b5000b5010c5010c5020c5020c502
 010d00000c5520c5420c5300c5000c5500c5400c5000c5500c5000c5520c5520c5400c53110541105500c5000e5500c5000e5520e5400e5310c5510c5000c5500c550005000b5500b5510c5510c5520c5420c532
 __music__
 00 0a4b4344
