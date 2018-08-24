@@ -2,17 +2,15 @@ pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
 -- todo
--- 3. combos
--- 4. levels
---      end of level detection
---      next level screen
---      stage clearing
--- 5. different bricks
---      hardened brick
---      indestructible brick
---      explosive brick
---      powerup brick
 -- 6. powerups
+--      pills
+--      speed down
+--      1up
+--      sticky ball
+--      expand
+--      reduction
+--      mega ball
+--      (multiball) ?
 -- 7. more juicyness
 --      arrow animation
 --      combo text
@@ -29,7 +27,7 @@ __lua__
 -- s : explosive
 -- p : powerup
 
-local ball, pad, bricks, lives, score, chain, levels, level, scene, debug
+local ball, pad, bricks, powups, lives, score, chain, levels, level, scene, debug
 
 function _init()
   scene = "start"
@@ -37,11 +35,12 @@ function _init()
 
   levels = {
     "x5b1x5/s9s2",
+    "b9b2/x4p3",
     "b9b2/b9b2/b9b2",
     "b3xb3xb3/xbxxh1b1h1xxbx/xpxxh1s1h1xxpx/b1h1b1xb3xb1h1b1",
     "x5s1x5/x4b3x4/x1i9",
   }
-  level = 1
+  level = 2
   lives = 3
   score = 0
 end
@@ -53,6 +52,7 @@ function start()
   
   scene = "game"
   bricks = {}
+  powups = {}
   chain = 1
   score = 0
 
@@ -146,6 +146,10 @@ function update_game()
     if (brick.t != "i") add(dest_bricks, brick)
   end
 
+  for pow in all(powups) do
+    pow:update()
+  end
+
   if (#dest_bricks < 1) then 
     
     if level == #levels then
@@ -192,6 +196,10 @@ function draw_game()
   pad:draw()  
   for brick in all(bricks) do
     brick:draw()
+  end
+
+  for pow in all(powups) do
+    pow:draw()
   end
 end
 
@@ -276,7 +284,8 @@ function hit_brick(b, combo)
       chain += 1
       chain = mid(1, chain, 8)
     end
-    -- todo: powerups
+    b:spawn_pill("spd")
+    del(bricks, b)
   end
 end
 
@@ -299,6 +308,15 @@ function explode_bricks(b)
     end
   end
   del(bricks, b)
+end
+
+function collide(a, b)
+  if (a.x > b.x + b.w) return false 
+  if (a.x + a.w < b.x) return false 
+  if (a.y > b.y + b.h) return false 
+  if (a.y + a.h < b.y) return false 
+
+  return true
 end
 
 function make_ball()
@@ -341,7 +359,7 @@ function make_ball()
           sfx(0)
         end
 
-        if self:collide(nextx, nexty, pad) then
+        if self:bounce(nextx, nexty, pad) then
           -- check if ball hits pad
           -- find out which direction ball will deflect
           if self:deflect(pad) then
@@ -381,7 +399,7 @@ function make_ball()
 
         local brick_hit = false
         for brick in all(bricks) do 
-          if self:collide(nextx, nexty, brick) then
+          if self:bounce(nextx, nexty, brick) then
             -- check if ball hits brick
             -- find out which direction ball will deflect
             if not brick_hit then
@@ -414,7 +432,6 @@ function make_ball()
           self.y = nexty
         end
 
-
         if self.y > 127 then
           if lives <= 1 then
             gameover()
@@ -437,7 +454,7 @@ function make_ball()
       if (self.sticky) line(self.x + self.vx * 4, self.y + self.vy * 4, self.x + self.vx * 8, self.y + self.vy * 8, 10)
     end,
 
-    collide = function(self, nextx, nexty, other)
+    bounce = function(self, nextx, nexty, other)
       if (nexty - self.r > other.y + other.h) return false -- top
       if (nexty + self.r < other.y) return false -- bottom
       if (nextx - self.r > other.x + other.w) return false -- left
@@ -517,8 +534,7 @@ function make_pad()
     end,
 
     draw = function(self)
-      --rectfill(self.x, self.y, self.x + self.w, self.y + self.h, self.c)
-      sspr(0, 16, self.w, 5, self.x, self.y - 2)
+      spr(32, self.x, self.y - 2, 3, 1)
     end
   }
 
@@ -576,10 +592,59 @@ function make_brick(id, x, y, w, h, t)
         --self.hp = 1
         self.pts = 200
       end
+    end,
+
+    spawn_pill = function(self, t)
+      add(powups, make_powup(t, self.x + self.w / 2, self.y + self.h + 2))
     end
   }
 
   return brick
+end
+
+function make_powup(t, x, y)
+  local pow = {
+    x = x,
+    y = y,
+    vy = 0.5,
+    w = 4,
+    h = 4,
+    s = 0,
+    t = t,
+
+    update = function(self)
+      self.y += self.vy
+
+      if (self.y >= 128) del(powups, self)
+
+      if collide(self, pad) then
+        del(powups, self)
+      end
+    end,
+
+    draw = function(self)
+      if self.t == "spd" then
+        self.s = 48
+      elseif self.t == "1up" then
+        self.s = 49
+      elseif self.t == "sty" then
+        self.s = 50
+      elseif self.t == "exp" then
+        self.s = 51
+      elseif self.t == "rdc" then
+        self.s = 52
+      elseif self.t == "meg" then
+        self.s = 53
+      elseif self.t == "mlt" then
+        self.s = 54
+      end
+
+      spr(self.s, self.x, self.y)
+      rect(self.x, self.y, self.x + self.w, self.y + self.h, 7)
+    end
+  }
+
+  return pow
 end
 
 __gfx__
@@ -604,6 +669,14 @@ aaa70000000000000000000000000000000000000000000000000000000000000000000000000000
 56666666666666666666666700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 56655555555555555555566700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 05500000000000000000056000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06670000066700000667000006670000066700000667000006670000000000000000000000000000000000000000000000000000000000000000000000000000
+69997000688870006bbb7000622270006ddd70006ccc70006aaa7000000000000000000000000000000000000000000000000000000000000000000000000000
+69996000688860006bbb6000622260006ddd60006ccc60006aaa6000000000000000000000000000000000000000000000000000000000000000000000000000
+59996000588860005bbb6000522260005ddd60005ccc60005aaa6000000000000000000000000000000000000000000000000000000000000000000000000000
+05660000056600000566000005660000056600000566000005660000000000000000000000000000000000000000000000000000000000000000000000000000
 __gff__
 0002020202020002020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
