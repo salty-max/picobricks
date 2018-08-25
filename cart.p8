@@ -3,7 +3,8 @@ version 16
 __lua__
 -- todo
 -- 6. powerups
---      pills
+--      sfx
+--      pills types
 --      speed down
 --      1up
 --      sticky ball
@@ -27,20 +28,20 @@ __lua__
 -- s : explosive
 -- p : powerup
 
-local ball, pad, bricks, powups, lives, score, chain, levels, level, scene, debug
+local ball, pad, bricks, powups, lives, score, chain, levels, level, scene, debug, powerup, powerup_t
 
 function _init()
   scene = "start"
   debug = ""
 
   levels = {
-    "x5b1x5/s9s2",
-    "b9b2/x4p3",
-    "b9b2/b9b2/b9b2",
     "b3xb3xb3/xbxxh1b1h1xxbx/xpxxh1s1h1xxpx/b1h1b1xb3xb1h1b1",
+    "x5b1x5/s9s2",
+    "b9b2/x1p9",
+    "b9b2/b9b2/b9b2",
     "x5s1x5/x4b3x4/x1i9",
   }
-  level = 2
+  level = 3
   lives = 3
   score = 0
 end
@@ -70,7 +71,7 @@ end
 
 function gameover()
   scene = "gameover"
-  sfx(12)
+  sfx(20)
 end
 
 function serve_ball()
@@ -82,6 +83,9 @@ function serve_ball()
   ball.sticky = true
 
   chain = 1
+  powerup = ""
+  powerup_s = 0
+  powerup_t = 0
 end
 
 function build_bricks(lvl, w, h, o)
@@ -160,6 +164,9 @@ function update_game()
       scene = "levelend"
     end
   end
+
+  if (powerup != "") powerup_t -= 1
+  if (powerup_t <= 0) powerup = ""
 end
 
 function update_start()
@@ -188,10 +195,8 @@ end
 
 function draw_game()
   cls(1)
-  if (debug != "") print(debug, 4, 120, 6)
-  rectfill(0, 0, 127, 8, 0)
-  for i=1,lives do print("♥", 4 + 8*i - 8, 2, 8) end
-  handle_score()
+  if (debug != "") print(debug, 120, 120, 6)
+  draw_ui()
   ball:draw()
   pad:draw()  
   for brick in all(bricks) do
@@ -234,6 +239,16 @@ function draw_levelend()
   print(lo_text, 64 - (#lo_text / 2) * 4, 38, 11)
   print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
   print(cta, 64 - (#cta / 2) * 4, 60, 6)
+end
+
+function draw_ui()
+  rectfill(0, 0, 127, 8, 0)
+  for i=1,lives do print("♥", 4 + 8*i - 8, 2, 8) end
+  handle_score()
+  if powerup != "" then
+  spr(powerup_s, 4, 120)
+  print(powerup_t, 12, 120, 7)
+  end
 end
 
 function handle_score()
@@ -319,6 +334,9 @@ function collide(a, b)
   return true
 end
 
+function activate_powup(type)
+end
+
 function make_ball()
   local ball = {
     x = 16,
@@ -395,6 +413,7 @@ function make_ball()
           end
           chain = 1
           sfx(1)
+          if (powerup == "sty") self.sticky = true
         end
 
         local brick_hit = false
@@ -431,19 +450,19 @@ function make_ball()
           self.x = nextx
           self.y = nexty
         end
-
-        if self.y > 127 then
-          if lives <= 1 then
-            gameover()
-          else
-            lives -= 1
-            sfx(2)
-            serve_ball()
-          end
-        end
-
-        check_explosions()
       end
+
+      if self.y > 127 then
+        if lives <= 1 then
+          gameover()
+        else
+          lives -= 1
+          sfx(2)
+          serve_ball()
+        end
+      end
+
+      check_explosions()
     end,
 
     draw = function(self)
@@ -594,8 +613,9 @@ function make_brick(id, x, y, w, h, t)
       end
     end,
 
-    spawn_pill = function(self, t)
-      add(powups, make_powup(t, self.x + self.w / 2, self.y + self.h + 2))
+    spawn_pill = function(self)
+      local types = {"spd", "1up", "sty", "exp", "rdc", "meg", "mlt"}
+      add(powups, make_powup(types[flr(rnd(6) + 1)], self.x + self.w / 2, self.y + self.h + 2))
     end
   }
 
@@ -618,6 +638,8 @@ function make_powup(t, x, y)
       if (self.y >= 128) del(powups, self)
 
       if collide(self, pad) then
+        self:activate()
+        sfx(12)
         del(powups, self)
       end
     end,
@@ -640,7 +662,36 @@ function make_powup(t, x, y)
       end
 
       spr(self.s, self.x, self.y)
-      rect(self.x, self.y, self.x + self.w, self.y + self.h, 7)
+    end,
+
+    activate = function(self)
+      if self.t == "spd" then
+        -- slow down ball
+        self:reset(self.t, 600)
+      elseif self.t == "1up" then
+        lives += 1
+        self:reset("", 0)
+      elseif self.t == "sty" then
+        self:reset(self.t, 600)
+      elseif self.t == "exp" then
+        self:reset(self.t, 600)
+        -- expand paddle
+      elseif self.t == "rdc" then
+        self:reset(self.t, 600)
+        -- reduce paddle
+      elseif self.t == "meg" then
+        self:reset(self.t, 600)
+        -- megaball
+      elseif self.t == "mlt" then
+        self:reset(self.t, 600)
+        -- multiball
+      end
+    end,
+
+    reset = function(self, type, timer)
+      powerup = type
+      powerup_t = 600
+      powerup_s = self.s
     end
   }
 
@@ -692,7 +743,15 @@ __sfx__
 00020000343403a3403a3303a32030300303000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 00020000363403c3403c3303c32030300303000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 01020000383403e3403e3303e32030300303000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
-000200003b5530c5020c5000c5000c5000c5000c5000c5000c5000c5020c5020c5000c50110501105000c5000e5000c5000e5020e5000e5010c5010c5000c5000c500005000b5000b5010c5010c5020c5020c502
+010200003b5530c5020c5000c5000c5000c5000c5000c5000c5000c5020c5020c5000c50110501105000c5000e5000c5000e5020e5000e5010c5010c5000c5000c500005000b5000b5010c5010c5020c5020c502
+010800001b0501b051270502705033051330523305233052000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010d00000c5520c5420c5300c5000c5500c5400c5000c5500c5000c5520c5520c5400c53110541105500c5000e5500c5000e5520e5400e5310c5510c5000c5500c550005000b5500b5510c5510c5520c5420c532
 __music__
 00 0a4b4344
