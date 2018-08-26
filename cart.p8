@@ -25,7 +25,7 @@ __lua__
 -- p : powerup
 
 -- powerups
--- spd ->   ball speed down
+-- spd ->   ball speed down 
 -- 1up ->   extra life
 -- sty ->   sticky ball
 -- exp ->   increase paddle size
@@ -34,7 +34,7 @@ __lua__
 --          and go through all bricks except indestructible ones
 -- mlt ->   spawn 2 other balls
 
-local ball, pad, bricks, powups, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t
+local ball, balls, pad, bricks, powups, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t
 
 function _init()
   scene = "start"
@@ -54,11 +54,13 @@ function _init()
 end
 
 function start()
+  -- brick global variables
   local brick_w = 10
   local brick_h = 5
   local brick_offset = 1
   
   scene = "game"
+  balls = {}
   bricks = {}
   powups = {}
   chain = 1
@@ -68,6 +70,7 @@ function start()
   pad = make_pad()
   build_bricks(levels[level], brick_w, brick_h, brick_offset)
 
+  -- reset game
   serve_ball()
 end
 
@@ -104,14 +107,19 @@ function build_bricks(lvl, w, h, o)
   for i = 1,#lvl do
     j += 1
     id += 1
+    -- extract current character from level string
     chr = sub(lvl, i, i)
+    -- check for bricks characters
     if chr == "b" or chr == "h" or chr =="i" or chr == "s" or chr == "p" then
       last = chr
       set_brick(id, chr, j, w, h, o)
+    -- check for spaces
     elseif chr == "x" then
       last = "x"
+    -- check for line breaks
     elseif chr == '/' then
       j = flr((j - 1) / 11) * 11
+    -- create n bricks of last character type
     elseif chr >= "0" and chr <= "9" then
       for k = 1,tonum(chr) - 1 do
         set_brick(id, last, j, w, h, o)
@@ -155,6 +163,7 @@ function update_game()
     brick:update()
     brick:set_type()
 
+    -- remove indestructiblr bricks from bricks counter
     if (brick.t != "i") add(dest_bricks, brick)
   end
 
@@ -173,9 +182,11 @@ function update_game()
     end
   end
 
+  -- powerup timer handling
   if (powerup != "") powerup_t -= 1
   if (powerup_t <= 0) powerup = ""
 
+  -- score multiplier
   if powerup == "rdc" then
     mult = 2
   else
@@ -268,6 +279,7 @@ end
 function handle_score()
   local chain_color
 
+  -- combo indicator color management
   if chain > 2 and chain < 5 then
     chain_color = 10
   elseif chain >= 5 and chain <= 7 then
@@ -285,6 +297,7 @@ function handle_score()
 end
 
 function hit_brick(b, combo)
+  -- check brick type on hit and apply behavior based on it
   if b.t == "b" then
     sfx(3 + (chain - 1))
     if combo then
@@ -328,6 +341,7 @@ function hit_brick(b, combo)
 end
 
 function check_explosions()
+  -- check if bricks will explode
   for brick in all(bricks) do
     if brick.t == "rex" then
       brick.t = "ex"
@@ -340,6 +354,7 @@ function check_explosions()
 end
 
 function explode_bricks(b)
+  -- explosion spread management
   for brick in all(bricks) do
     if brick.id != b.id and abs(brick.x - b.x) <= brick.w + 1 and abs(brick.y - b.y) <= brick.h + 1 then
       hit_brick(brick, false)
@@ -349,15 +364,13 @@ function explode_bricks(b)
 end
 
 function collide(a, b)
+  -- check for collision between two rectangle hitboxes
   if (a.x > b.x + b.w) return false 
   if (a.x + a.w < b.x) return false 
   if (a.y > b.y + b.h) return false 
   if (a.y + a.h < b.y) return false 
 
   return true
-end
-
-function activate_powup(type)
 end
 
 function make_ball()
@@ -379,14 +392,17 @@ function make_ball()
     update = function(self)
       local nextx, nexty
 
+      -- release ball
       if self.sticky and btnp(5) then
         self.sticky = false
       end
 
       if self.sticky then
+        -- make ball move alongside paddle
         self.x = pad.x + self.sticky_x
         self.y = pad.y - self.r - 1
       else
+        -- ball movement
         if powerup == "spd" then
           nextx = self.x + (self.vx / 2)
           nexty = self.y + (self.vy / 2)
@@ -395,6 +411,7 @@ function make_ball()
           nexty = self.y + self.vy
         end
 
+        -- make ball bounce off screen boundaries
         if nextx <= 0  or nextx >= 127 then
           nextx = mid(0, nextx, 127)
           self.vx = -self.vx
@@ -440,8 +457,11 @@ function make_ball()
               end
             end
           end
+
           chain = 1
           sfx(1)
+
+          -- make ball sticky
           if (powerup == "sty") and self.vy < 0 then
             self.sticky = true
             self.sticky_x = self.x - pad.x
@@ -486,6 +506,7 @@ function make_ball()
         end
       end
 
+      -- ball falls out of screen
       if self.y > 127 then
         if lives <= 1 then
           gameover()
@@ -501,18 +522,20 @@ function make_ball()
 
     draw = function(self)
 
+      -- manage ball sprite
       if powerup == "meg" then
         self.s = 17
       else
         self.s = 16
       end
-      --circfill(self.x, self.y, self.r, 7)
+
       spr(self.s, self.x - self.r, self.y - self.r)
 
       -- serve preview
       if (self.sticky) line(self.x + self.vx * 4, self.y + self.vy * 4, self.x + self.vx * 8, self.y + self.vy * 8, 10)
     end,
 
+    -- check for collision between ball and rect hitboxes
     bounce = function(self, nextx, nexty, other)
       if (nexty - self.r > other.y + other.h) return false -- top
       if (nexty + self.r < other.y) return false -- bottom
@@ -522,6 +545,7 @@ function make_ball()
       return true
     end,
 
+    -- calculate ball direction based on where it hits another entity
     deflect = function(self, target)
       local slp = self.vy / self.vx
       local cx, cy
@@ -548,6 +572,7 @@ function make_ball()
       end
     end,
 
+    -- calculate ball angle
     set_angle = function(self, a)
       self.a = a
 
@@ -578,19 +603,28 @@ function make_pad()
     c = 6,
 
     update = function(self)
+
+      -- move left
       if btn(0) then
         self.vx = -self.s
         if (ball.sticky) ball.vx = -1
       end
+
+      -- move right
       if btn(1) then
         self.vx = self.s
         if (ball.sticky) ball.vx = 1
       end
+      
+      -- apply friction
       self.vx *= 0.85
 
+      -- apply velocity
       self.x += self.vx
+      -- paddle don't go offscreen
       self.x = mid(0, self.x, 127 - self.w)
 
+      -- paddle size management
       if (powerup == "exp") then
         self.w = 32
       elseif (powerup == "rdc") then 
@@ -600,6 +634,7 @@ function make_pad()
       end
     end,
 
+    -- draw paddle based on its size
     draw = function(self)
       if (powerup == "exp") then
         spr(37, self.x, self.y - 2, 4, 1)
@@ -667,6 +702,7 @@ function make_brick(id, x, y, w, h, t)
       end
     end,
 
+    -- randomly spawn powerups
     spawn_pill = function(self)
       local types = {"spd", "1up", "sty", "exp", "rdc", "meg", "mlt"}
       add(powups, make_powup(types[flr(rnd(7)) + 1], self.x + self.w / 2, self.y + self.h + 2))
@@ -690,6 +726,7 @@ function make_powup(t, x, y)
     update = function(self)
       self.y += self.vy
 
+      -- delete pill when it exits screen
       if (self.y >= 128) del(powups, self)
 
       if collide(self, pad) then
@@ -700,6 +737,7 @@ function make_powup(t, x, y)
     end,
 
     draw = function(self)
+      -- pill sprite management
       if self.t == "spd" then
         self.s = 48
       elseif self.t == "1up" then
@@ -719,6 +757,8 @@ function make_powup(t, x, y)
       spr(self.s, self.x, self.y)
     end,
 
+
+    -- set active powerup type, and duration
     activate = function(self)
       if self.t == "spd" then
         -- slow down ball
