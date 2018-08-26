@@ -370,8 +370,13 @@ function make_ball()
         self.x = pad.x + self.sticky_x
         self.y = pad.y - self.r - 1
       else
-        nextx = self.x + self.vx
-        nexty = self.y + self.vy
+        if powerup == "spd" then
+          nextx = self.x + (self.vx / 2)
+          nexty = self.y + (self.vy / 2)
+        else
+          nextx = self.x + self.vx
+          nexty = self.y + self.vy
+        end
 
         if nextx <= 0  or nextx >= 127 then
           nextx = mid(0, nextx, 127)
@@ -639,7 +644,7 @@ function make_brick(id, x, y, w, h, t)
 
     spawn_pill = function(self)
       local types = {"spd", "1up", "sty", "exp", "rdc", "meg", "mlt"}
-      add(powups, make_powup("rdc", self.x + self.w / 2, self.y + self.h + 2))
+      add(powups, make_powup(types[flr(rnd(7)) + 1], self.x + self.w / 2, self.y + self.h + 2))
     end
   }
 
@@ -650,7 +655,7 @@ function make_powup(t, x, y)
   local pow = {
     x = x,
     y = y,
-    vy = 0.5,
+    vy = 0.7,
     w = 4,
     h = 4,
     s = 0,
