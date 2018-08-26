@@ -2,24 +2,22 @@ pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
 -- todo
--- 6. powerups
---      sfx
---      pills types
---      speed down
---      1up
---      sticky ball
---      expand
---      reduction
---      mega ball
---      (multiball) ?
--- 7. more juicyness
---      arrow animation
---      combo text
---      text blinking
---      particles
---      screen shakes
--- 8. high score
--- 9. timer
+-- 6.   powerups
+--        speed down
+--        mega ball
+--        (multiball) ?
+-- 7.   more juicyness
+--        arrow animation
+--        combo text
+--        power up text
+--        text blinking
+--        particles
+--        screen shakes
+-- 8.   high score
+-- 9.   timer
+-- 10.  better collisions
+-- 11.  gameplay tweaks
+--        smaller paddle ?  
 
 -- brick types
 -- b : regular
@@ -28,7 +26,7 @@ __lua__
 -- s : explosive
 -- p : powerup
 
-local ball, pad, bricks, powups, lives, score, chain, levels, level, scene, debug, powerup, powerup_t
+local ball, pad, bricks, powups, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t
 
 function _init()
   scene = "start"
@@ -44,6 +42,7 @@ function _init()
   level = 3
   lives = 3
   score = 0
+  mult = 1
 end
 
 function start()
@@ -75,12 +74,13 @@ function gameover()
 end
 
 function serve_ball()
-  ball.x = pad.x + pad.w / 2
+  ball.x = 64
   ball.y = pad.y - ball.r
   ball.vx = 1
   ball.vy = -1
   ball.a = 1
   ball.sticky = true
+  ball.sticky_x = flr(pad.w / 2)
 
   chain = 1
   powerup = ""
@@ -167,18 +167,24 @@ function update_game()
 
   if (powerup != "") powerup_t -= 1
   if (powerup_t <= 0) powerup = ""
+
+  if powerup == "rdc" then
+    mult = 2
+  else
+    mult = 1
+  end
 end
 
 function update_start()
-  if (btn(5)) start()
+  if (btnp(5)) start()
 end
 
 function update_gameover()
-  if (btn(5)) scene = "start"
+  if (btnp(5)) scene = "start"
 end
 
 function update_levelend()
-  if (btn(5)) nextlevel()
+  if (btnp(5)) nextlevel()
 end
 
 function _draw()
@@ -274,7 +280,7 @@ function hit_brick(b, combo)
   if b.t == "b" then
     sfx(3 + (chain - 1))
     if combo then
-      score += b.pts * chain
+      score += (b.pts * chain) * mult
       chain += 1
       chain = mid(1, chain, 8)
     end
@@ -283,7 +289,7 @@ function hit_brick(b, combo)
     b.t = "rex"
     sfx(3 + (chain - 1))
     if combo then
-      score += b.pts * chain
+      score += (b.pts * chain) * mult
       chain += 1
       chain = mid(1, chain, 8)
     end
@@ -295,7 +301,7 @@ function hit_brick(b, combo)
   elseif b.t == "p" then
     sfx(3 + (chain - 1))
     if combo then
-      score += b.pts * chain
+      score += (b.pts * chain) * mult
       chain += 1
       chain = mid(1, chain, 8)
     end
@@ -339,7 +345,7 @@ end
 
 function make_ball()
   local ball = {
-    x = 16,
+    x = 64,
     y = 72,
     vx = 1,
     vy = 1,
@@ -351,6 +357,7 @@ function make_ball()
     --dr = 0.5,
     c = 10,
     sticky = true,
+    sticky_x = 0,
 
     update = function(self)
       local nextx, nexty
@@ -360,8 +367,8 @@ function make_ball()
       end
 
       if self.sticky then
-        ball.x = pad.x + pad.w / 2
-        ball.y = pad.y - ball.r - 1
+        self.x = pad.x + self.sticky_x
+        self.y = pad.y - self.r - 1
       else
         nextx = self.x + self.vx
         nexty = self.y + self.vy
@@ -413,7 +420,10 @@ function make_ball()
           end
           chain = 1
           sfx(1)
-          if (powerup == "sty") self.sticky = true
+          if (powerup == "sty") and self.vy < 0 then
+            self.sticky = true
+            self.sticky_x = self.x - pad.x
+          end
         end
 
         local brick_hit = false
@@ -466,7 +476,7 @@ function make_ball()
     end,
 
     draw = function(self)
-      --circfill(self.x, self.y, self.r, self.c)
+      --circfill(self.x, self.y, self.r, 7)
       spr(self.s, self.x - self.r, self.y - self.r)
 
       -- serve preview
@@ -550,10 +560,24 @@ function make_pad()
 
       self.x += self.vx
       self.x = mid(0, self.x, 127 - self.w)
+
+      if (powerup == "exp") then
+        self.w = 32
+      elseif (powerup == "rdc") then 
+        self.w = 16
+      else
+        self.w = 24
+      end
     end,
 
     draw = function(self)
-      spr(32, self.x, self.y - 2, 3, 1)
+      if (powerup == "exp") then
+        spr(37, self.x, self.y - 2, 4, 1)
+      elseif (powerup == "rdc") then 
+        spr(35, self.x, self.y - 2, 2, 1)
+      else
+        spr(32, self.x, self.y - 2, 3, 1)
+      end
     end
   }
 
@@ -615,7 +639,7 @@ function make_brick(id, x, y, w, h, t)
 
     spawn_pill = function(self)
       local types = {"spd", "1up", "sty", "exp", "rdc", "meg", "mlt"}
-      add(powups, make_powup(types[flr(rnd(6) + 1)], self.x + self.w / 2, self.y + self.h + 2))
+      add(powups, make_powup("rdc", self.x + self.w / 2, self.y + self.h + 2))
     end
   }
 
@@ -715,11 +739,11 @@ aaa70000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-06700000000000000000077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-56677777777777777777766700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-56666666666666666666666700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-56655555555555555555566700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-05500000000000000000056000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06700000000000000000077006700000000007700670000000000000000000000000077000000000000000000000000000000000000000000000000000000000
+56677777777777777777766756677777777776675667777777777777777777777777766700000000000000000000000000000000000000000000000000000000
+56666666666666666666666756666666666666675666666666666666666666666666666700000000000000000000000000000000000000000000000000000000
+56655555555555555555566756655555555556675665555555555555555555555555566700000000000000000000000000000000000000000000000000000000
+05500000000000000000056005500000000005600550000000000000000000000000056000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
