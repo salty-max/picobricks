@@ -3,8 +3,7 @@ version 16
 __lua__
 -- todo
 -- 7.   more juicyness
---        screen shakes
---        text blinking
+--        fade out (in ?)
 --        arrow animation
 --        particles
 --          death
@@ -40,7 +39,23 @@ __lua__
 --                                              go through all bricks 
 --                                              except indestructibles
 
-local ball, balls, pad, bricks, powups, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake
+-- sfx
+-- 00 -> wall hit
+-- 01 -> pad hit
+-- 02 -> lose ball
+-- 03 -> brick chain x1
+-- 04 -> brick chain x2
+-- 05 -> brick chain x3
+-- 06 -> brick chain x4
+-- 07 -> brick chain x5
+-- 08 -> brick chain x6
+-- 09 -> brick chain x7
+-- 10 -> brick chain x8
+-- 11 -> indestructible brick hit
+-- 12 -> powerup pickup
+-- 13 -> start game
+
+local ball, balls, pad, bricks, powups, stars, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, start_cd, start_blink_speed
 
 function _init()
   scene = "start"
@@ -53,12 +68,22 @@ function _init()
     "b9b2/b9b2/b9b2",
     "x5p1x5/x4b3x4/x1i9",
   }
-
-  level = 2
+  level = 1
+  
   lives = 3
   score = 0
-  shake = 0
   mult = 1
+
+  -- screenshake intensity
+  shake = 0
+
+  -- blink variables
+  blink_f = 0
+  blink_ci = 1
+
+  -- menu blinking stuff
+  menu_cd = -1
+  menu_blink_speed = 20
 end
 
 function start()
@@ -71,6 +96,7 @@ function start()
   balls = {}
   bricks = {}
   powups = {}
+  stars = {}
   chain = 1
   score = 0
 
@@ -186,6 +212,8 @@ function update_game()
     pow:update()
   end
 
+  make_stars(1)
+
   if (#dest_bricks < 1) then 
     
     if level == #levels then
@@ -211,11 +239,39 @@ function update_game()
 end
 
 function update_start()
-  if (btnp(5)) start()
+  menu_blink_speed = 20
+  if menu_cd < 0 then
+    if (btnp(5)) then
+      menu_cd = 60
+      sfx(13)
+    end
+  else
+    menu_cd -= 1
+    menu_blink_speed = 5
+
+    if menu_cd <= 0 then
+      menu_cd = -1
+      start()
+    end
+  end
 end
 
 function update_gameover()
-  if (btnp(5)) scene = "start"
+  menu_blink_speed = 20
+  if menu_cd < 0 then
+    if (btnp(5)) then
+      menu_cd = 60
+      sfx(13)
+    end
+  else
+    menu_cd -= 1
+    menu_blink_speed = 5
+
+    if menu_cd <= 0 then
+      menu_cd = -1
+      scene = "start"
+    end
+  end
 end
 
 function update_levelend()
@@ -225,7 +281,6 @@ function update_levelend()
 end
 
 function _draw()
-
   if scene == "game" then
     draw_game()
   elseif scene == "start" then 
@@ -235,13 +290,16 @@ function _draw()
   elseif scene == "levelend" then
     draw_levelend()
   end
+
+  if (debug != "") print(debug, 100, 120, 6)
 end
 
 function draw_game()
   cls()
-  rectfill(0, 0, 127, 127, 1)
+  
+  draw_stars()
+
   --map(0,0,0,0,16,16)
-  if (debug != "") print(debug, 120, 120, 6)
   draw_ui()
   shake_screen()
   for ball in all(balls) do
@@ -262,21 +320,20 @@ function draw_start()
   local subtitle = "alpha version" 
   local cta = "press ❎ to start"
   cls(0)
-  for i=1,50 do
-    pset(flr(rnd(127)), flr(rnd(127)), flr(rnd(15)))
-  end
   print(title, 64 - (#title / 2) * 4, 30, 8)
   print(subtitle, 64 - (#subtitle / 2) * 4, 38, 6)
-  print(cta, 64 - (#cta / 2) * 4, 60, 12)
+  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {1, 12}))
 end
 
 function draw_gameover()
-  local go_text = "g a m e  o v e r"
+  local go_text = "game over !"
+  local score_text = "your score: "..score
   local cta = "press ❎ to try again"
   rectfill(-8, 30, 128, 72, 0)
   rect(-8, 30, 128, 72, 6)
   print(go_text, 64 - (#go_text / 2) * 4, 38, 8)
-  print(cta, 64 - (#cta / 2) * 4, 60, 6)
+  print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
+  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {0, 6}))
 end
 
 function draw_levelend()
@@ -298,6 +355,14 @@ function draw_ui()
   spr(powerup_s, 4, 120)
   print((powerup_t + 1) / 60, 12, 120, 7)
   end
+end
+
+function draw_stars()
+	for s in all(stars) do
+		pset(s.x,s.y,s.c)
+		s.y+=s.dy
+		if (s.y>128) del(stars,s)
+	end
 end
 
 function handle_score()
@@ -363,6 +428,7 @@ function hit_brick(b, combo)
     del(bricks, b)
   end
 end
+
 
 function check_explosions()
   -- check if bricks will explode
@@ -876,6 +942,18 @@ function make_powup(t, x, y)
   return pow
 end
 
+function make_stars(n)
+	while n > 0 do
+		star = {}
+		star.x = flr(rnd(128))
+		star.y = -2
+		star.c = 5 + flr(rnd(2))
+		star.dy = 3
+		add(stars,star)
+		n -= 1
+	end
+end
+
 ------ juicyness ------
 
 function shake_screen()
@@ -889,6 +967,18 @@ function shake_screen()
 
   shake *= 0.95
   if(shake < 0.05) shake = 0
+end
+
+function blink_text(speed, seq)
+  blink_f += 1
+
+  if blink_f > speed then
+    blink_f = 0
+    blink_ci += 1
+
+    if (blink_ci > #seq) blink_ci = 1
+  end
+  return seq[blink_ci]
 end
 
 __gfx__
@@ -955,7 +1045,7 @@ __sfx__
 00020000383403e3403e3303e32030300303000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 010200003b5530c5020c5000c5000c5000c5000c5000c5000c5000c5020c5020c5000c50110501105000c5000e5000c5000e5020e5000e5010c5010c5000c5000c500005000b5000b5010c5010c5020c5020c502
 0108000024344283352635429355283542b3550030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0108000028055285402f0552f54027055275402f0552f54028035285202f0352f52027025275102f0252f51000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
