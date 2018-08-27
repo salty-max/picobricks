@@ -16,22 +16,23 @@ __lua__
 --        smaller paddle ?  
 
 -- brick types
--- b : regular
--- h : hardened
--- i : indestructible
--- s : explosive
--- p : powerup
+-- b -> regular
+-- h -> hardened
+-- i -> indestructible
+-- s -> explosive
+-- p -> powerup
 
 -- powerups
--- spd ->   -> orange ->  ball speed down
--- 1up ->   -> white  ->  extra life
--- sty ->   -> green  ->  sticky ball
--- exp ->   -> pink   ->  increase paddle size
--- rdc ->   -> red    ->  decrease paddle size & double score
--- mlt ->   -> yellow ->  spawn 2 other balls
--- meg ->   -> blue   ->  make ball one shot hardened bricks 
---                        and go through all bricks except
---                        indestructible ones
+-- spd -> orange -> timer                   ->  ball speed down
+-- 1up -> white  -> instant                 ->  extra life
+-- sty -> green  -> no timer                ->  sticky ball
+-- exp -> pink   -> timer / cancels reduce  ->  increase paddle size
+-- rdc -> red    -> timer / cancels expand  ->  decrease paddle size &
+--                                              double score
+-- mlt -> yellow -> no timer                ->  spawn 2 other balls
+-- meg -> blue   -> timer                   ->  one shot hardened
+--                                              go through all bricks 
+--                                              except indestructibles
 
 local ball, balls, pad, bricks, powups, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t
 
@@ -91,7 +92,7 @@ function serve_ball()
   balls[1].vx = 1
   balls[1].vy = -1
   balls[1].a = 1
-  balls[1].sticky = true
+  balls[1].stuck = true
   balls[1].sticky_x = flr(pad.w / 2)
 
   chain = 1
@@ -182,6 +183,7 @@ function update_game()
       -- nice end game screen
       scene = "start"
     else
+      _draw()
       scene = "levelend"
     end
   end
@@ -391,24 +393,19 @@ function copyball(ob)
 end
 
 function multiball()
-  ball1 = balls[1]
-  ball2 = copyball(ball1)
-  ball3 = copyball(ball1)
+  ob = balls[flr(rnd(#balls)) + 1]
+  cb = copyball(ob)
 
-  if ball1.a == "0" then
-    ball2:set_angle(1)
-    ball3:set_angle(2)
-  elseif ball1.a == "1" then
-    ball2:set_angle(0)
-    ball3:set_angle(2)
+  if ob.a == "0" then
+    cb:set_angle(2)
+  elseif ob.a == "1" then
+    ob:set_angle(0)
+    cb:set_angle(2)
   else
-    ball2:set_angle(0)
-    ball3:set_angle(1)
+    cb:set_angle(0)
   end
 
-  add(balls, ball2)
-  add(balls, ball3)
-
+  add(balls, cb)
 end
 
 function make_ball()
@@ -423,21 +420,16 @@ function make_ball()
     r = 2,
     s = 16,
     c = 10,
-    sticky = false,
     sticky_x = 0,
+    stuck = false,
 
     update = function(self)
       local nextx, nexty
 
-      -- release ball
-      if self.sticky and btnp(5) then
-        self.sticky = false
-      end
-
-      if self.sticky then
+      if self.stuck then
         -- make ball move alongside paddle
-        balls[1].x = pad.x + self.sticky_x
-        balls[1].y = pad.y - self.r - 1
+        self.x = pad.x + self.sticky_x
+        self.y = pad.y - self.r - 1
       else
         -- ball movement
         if powerup == "spd" then
@@ -499,8 +491,10 @@ function make_ball()
           sfx(1)
 
           -- make ball sticky
-          if (powerup == "sty") and self.vy < 0 then
-            self.sticky = true
+          if pad.sticky and self.vy < 0 then
+            pad:release_ball()
+            pad.sticky = false
+            self.stuck = true
             self.sticky_x = self.x - pad.x
           end
         end
@@ -574,7 +568,7 @@ function make_ball()
       spr(self.s, self.x - self.r, self.y - self.r)
 
       -- serve preview
-      if (self.sticky) line(self.x + self.vx * 4, self.y + self.vy * 4, self.x + self.vx * 8, self.y + self.vy * 8, 10)
+      if (self.stuck) line(self.x + self.vx * 4, self.y + self.vy * 4, self.x + self.vx * 8, self.y + self.vy * 8, 10)
     end,
 
     -- check for collision between ball and rect hitboxes
@@ -643,23 +637,25 @@ function make_pad()
     h = 3,
     s = 3,
     c = 6,
+    sticky = false,
 
     update = function(self)
+
+       -- release ball
+      if btnp(5) then
+        self:release_ball()
+      end
 
       -- move left
       if btn(0) then
         self.vx = -self.s
-        for ball in all(balls) do
-          if (ball.sticky) ball.vx = -1
-        end
+        self:point_ball(-1)
       end
 
       -- move right
       if btn(1) then
         self.vx = self.s
-        for ball in all(balls) do
-          if (ball.sticky) ball.vx = 1
-        end
+        self:point_ball(1)
       end
       
       -- apply friction
@@ -689,6 +685,23 @@ function make_pad()
       else
         spr(32, self.x, self.y - 2, 3, 1)
       end
+    end,
+
+    release_ball = function(self)
+      for ball in all(balls) do
+        if ball.stuck then
+          ball.x = mid(3, ball.x, 124)
+          ball.stuck = false
+        end
+      end
+    end,
+
+    point_ball = function(self, sign)
+      for ball in all(balls) do
+        if ball.stuck then
+          ball.vx = abs(ball.vx) * sign
+        end
+      end
     end
   }
 
@@ -714,9 +727,7 @@ function make_brick(id, x, y, w, h, t)
     end,
 
     draw = function(self)
-      palt(0, false)
       sspr(self.sx, self.sy, self.w, self.h, self.x, self.y)
-      palt()
     end,
 
     set_type = function(self)
@@ -751,7 +762,7 @@ function make_brick(id, x, y, w, h, t)
     -- randomly spawn powerups
     spawn_pill = function(self)
       local types = {"spd", "1up", "sty", "exp", "rdc", "meg", "mlt"}
-      add(powups, make_powup("mlt", self.x + self.w / 2, self.y + self.h + 2))
+      add(powups, make_powup(types[flr(rnd(7)) + 1], self.x + self.w / 2, self.y + self.h + 2))
       --types[flr(rnd(7)) + 1]
     end
   }
@@ -794,39 +805,41 @@ function make_powup(t, x, y)
         self.s = 51
       elseif self.t == "rdc" then
         self.s = 52
-        palt(0, false)
       elseif self.t == "meg" then
         self.s = 53
       elseif self.t == "mlt" then
         self.s = 54
       end
       spr(self.s, self.x, self.y)
-      palt()
     end,
 
 
     -- set active powerup type, and duration
     activate = function(self)
-      if self.t == "spd" then
+      if self.t == "spd" then     -- speed down
         -- slow down ball
         self:reset(self.t, 600)
-      elseif self.t == "1up" then
+      elseif self.t == "1up" then -- extra life
         lives += 1
-        self:reset("", 0)
-      elseif self.t == "sty" then
-        self:reset(self.t, 600)
-      elseif self.t == "exp" then
+      elseif self.t == "sty" then -- sticky ball
+        local has_stuck = false
+        for ball in all(balls) do
+          if (ball.stuck) has_stuck = true
+        end
+
+        if (not has_stuck) pad.sticky = true
+      elseif self.t == "exp" then -- expand paddle
         self:reset(self.t, 600)
         -- expand paddle
-      elseif self.t == "rdc" then
+      elseif self.t == "rdc" then -- shrink paddle
         self:reset(self.t, 600)
         -- reduce paddle
-      elseif self.t == "meg" then
+      elseif self.t == "meg" then -- megaball
         self:reset(self.t, 600)
         -- megaball
-      elseif self.t == "mlt" then
-        self:reset("", 0)
+      elseif self.t == "mlt" then -- multiball
         -- multiball
+        pad: release_ball()
         multiball()
       end
     end,
