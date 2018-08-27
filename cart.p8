@@ -1,6 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
+------ comments ------
 -- todo
 -- 7.   more juicyness
 --        fade out (in ?)
@@ -55,7 +56,10 @@ __lua__
 -- 12 -> powerup pickup
 -- 13 -> start game
 
-local ball, balls, pad, bricks, powups, stars, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, start_cd, start_blink_speed
+-->8
+------ init ------
+
+local ball, balls, pad, bricks, powups, stars, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, menu_cd, menu_blink_speed, menu_transition, fade, go_cd
 
 function _init()
   scene = "start"
@@ -70,7 +74,7 @@ function _init()
   }
   level = 1
   
-  lives = 3
+  lives = 1
   score = 0
   mult = 1
 
@@ -81,9 +85,16 @@ function _init()
   blink_f = 0
   blink_ci = 1
 
-  -- menu blinking stuff
+  -- menu animation helpers
   menu_cd = -1
   menu_blink_speed = 20
+  menu_transition = 60
+
+  -- gameover animation helpers
+  go_cd = -1
+
+  -- fading percentage
+  fade = 0
 end
 
 function start()
@@ -114,7 +125,8 @@ function nextlevel()
 end
 
 function gameover()
-  scene = "gameover"
+  scene = "gameoverwait"
+  go_cd = 60
   sfx(20)
 end
 
@@ -175,194 +187,6 @@ function set_brick(id, t, n, w, h, o)
   else
     add(bricks, make_brick(id, 4 + ((n - 1) % 11) * (w + o), 20 + flr((n - 1) / 11) * (h + o), w, h, t))
   end
-end
-
-function _update60()
-  if scene == "game" then
-    update_game()
-  elseif scene == "start" then
-    update_start()
-  elseif scene == "gameover" then
-    update_gameover()
-  elseif scene == "levelend" then
-    shake = 0
-    camera()
-    update_levelend()
-  end
-end
-
-function update_game()
-  local dest_bricks = {}
-
-  for ball in all(balls) do
-    ball:update()
-  end
-
-  pad:update()
-
-  for brick in all(bricks) do
-    brick:update()
-    brick:set_type()
-
-    -- remove indestructiblr bricks from bricks counter
-    if (brick.t != "i") add(dest_bricks, brick)
-  end
-
-  for pow in all(powups) do
-    pow:update()
-  end
-
-  make_stars(1)
-
-  if (#dest_bricks < 1) then 
-    
-    if level == #levels then
-      -- todo
-      -- nice end game screen
-      scene = "start"
-    else
-      _draw()
-      scene = "levelend"
-    end
-  end
-
-  -- powerup timer handling
-  if (powerup != "") powerup_t -= 1
-  if (powerup_t <= 0) powerup = ""
-
-  -- score multiplier
-  if powerup == "rdc" then
-    mult = 2
-  else
-    mult = 1
-  end
-end
-
-function update_start()
-  menu_blink_speed = 20
-  if menu_cd < 0 then
-    if (btnp(5)) then
-      menu_cd = 60
-      sfx(13)
-    end
-  else
-    menu_cd -= 1
-    menu_blink_speed = 5
-
-    if menu_cd <= 0 then
-      menu_cd = -1
-      start()
-    end
-  end
-end
-
-function update_gameover()
-  menu_blink_speed = 20
-  if menu_cd < 0 then
-    if (btnp(5)) then
-      menu_cd = 60
-      sfx(13)
-    end
-  else
-    menu_cd -= 1
-    menu_blink_speed = 5
-
-    if menu_cd <= 0 then
-      menu_cd = -1
-      scene = "start"
-    end
-  end
-end
-
-function update_levelend()
-  if (btnp(5)) nextlevel()
-  camera(0, 0)
-  shake = 0
-end
-
-function _draw()
-  if scene == "game" then
-    draw_game()
-  elseif scene == "start" then 
-    draw_start()
-  elseif scene == "gameover" then
-    draw_gameover()
-  elseif scene == "levelend" then
-    draw_levelend()
-  end
-
-  if (debug != "") print(debug, 100, 120, 6)
-end
-
-function draw_game()
-  cls()
-  
-  draw_stars()
-
-  --map(0,0,0,0,16,16)
-  draw_ui()
-  shake_screen()
-  for ball in all(balls) do
-    ball:draw()
-  end
-  pad:draw()  
-  for brick in all(bricks) do
-    brick:draw()
-  end
-
-  for pow in all(powups) do
-    pow:draw()
-  end
-end
-
-function draw_start()
-  local title = "picobricks"
-  local subtitle = "alpha version" 
-  local cta = "press ❎ to start"
-  cls(0)
-  print(title, 64 - (#title / 2) * 4, 30, 8)
-  print(subtitle, 64 - (#subtitle / 2) * 4, 38, 6)
-  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {1, 12}))
-end
-
-function draw_gameover()
-  local go_text = "game over !"
-  local score_text = "your score: "..score
-  local cta = "press ❎ to try again"
-  rectfill(-8, 30, 128, 72, 0)
-  rect(-8, 30, 128, 72, 6)
-  print(go_text, 64 - (#go_text / 2) * 4, 38, 8)
-  print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
-  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {0, 6}))
-end
-
-function draw_levelend()
-  local lo_text = "stage clear !"
-  local cta = "press ❎ to continue"
-  local score_text = "your score: "..score
-  rectfill(-8, 30, 128, 72, 0)
-  rect(-8, 30, 128, 72, 6)
-  print(lo_text, 64 - (#lo_text / 2) * 4, 38, 11)
-  print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
-  print(cta, 64 - (#cta / 2) * 4, 60, 6)
-end
-
-function draw_ui()
-  rectfill(0, 0, 127, 8, 0)
-  for i=1,lives do print("♥", 4 + 8*i - 8, 2, 8) end
-  handle_score()
-  if powerup != "" then
-  spr(powerup_s, 4, 120)
-  print((powerup_t + 1) / 60, 12, 120, 7)
-  end
-end
-
-function draw_stars()
-	for s in all(stars) do
-		pset(s.x,s.y,s.c)
-		s.y+=s.dy
-		if (s.y>128) del(stars,s)
-	end
 end
 
 function handle_score()
@@ -492,6 +316,222 @@ function multiball()
   add(balls, cb)
 end
 
+-->8
+------ update functions ------
+
+function _update60()
+  if scene == "game" then
+    update_game()
+  elseif scene == "start" then
+    update_start()
+  elseif scene == "gameoverwait" then
+    update_gameoverwait()
+  elseif scene == "gameover" then
+    update_gameover()
+  elseif scene == "levelend" then
+    shake = 0
+    camera()
+    update_levelend()
+  end
+end
+
+function update_game()
+  local dest_bricks = {}
+
+  for ball in all(balls) do
+    ball:update()
+  end
+
+  pad:update()
+
+  for brick in all(bricks) do
+    brick:update()
+    brick:set_type()
+
+    -- remove indestructiblr bricks from bricks counter
+    if (brick.t != "i") add(dest_bricks, brick)
+  end
+
+  for pow in all(powups) do
+    pow:update()
+  end
+
+  make_stars(1)
+
+  if (#dest_bricks < 1) then 
+    
+    if level == #levels then
+      -- todo
+      -- nice end game screen
+      scene = "start"
+    else
+      _draw()
+      scene = "levelend"
+    end
+  end
+
+  -- powerup timer handling
+  if (powerup != "") powerup_t -= 1
+  if (powerup_t <= 0) powerup = ""
+
+  -- score multiplier
+  if powerup == "rdc" then
+    mult = 2
+  else
+    mult = 1
+  end
+end
+
+function update_start()
+  menu_blink_speed = 20
+  if menu_cd < 0 then
+    if (btnp(5)) then
+      menu_cd = menu_transition
+      sfx(13)
+    end
+  else
+    fade = (menu_transition - menu_cd) / menu_transition
+    menu_cd -= 1
+    menu_blink_speed = 5
+
+    if menu_cd <= 0 then
+      fade = 0
+      menu_cd = -1
+      start()
+    end
+  end
+end
+
+function update_gameover()
+  menu_blink_speed = 20
+  if menu_cd < 0 then
+    if (btnp(5)) then
+      menu_cd = 60
+      sfx(13)
+    end
+  else
+    menu_cd -= 1
+    menu_blink_speed = 5
+
+    if menu_cd <= 0 then
+      menu_cd = -1
+      scene = "start"
+    end
+  end
+end
+
+function update_gameoverwait()
+  -- stop background scrolling
+  for star in all(stars) do
+    star.dy = 0
+  end
+  
+  go_cd -= 1
+
+  if go_cd <= 0 then
+    go_cd = -1
+    scene = "gameover"
+  end
+end
+
+function update_levelend()
+  if (btnp(5)) nextlevel()
+  camera(0, 0)
+  shake = 0
+end
+-->8
+------ draw functions ------
+function _draw()
+  pal()
+  if (fade != 0) fadepal(fade)
+
+  if scene == "game" then
+    draw_game()
+  elseif scene == "start" then 
+    draw_start()
+  elseif scene == "gameoverwait" then
+    draw_game()
+  elseif scene == "gameover" then
+    draw_gameover()
+  elseif scene == "levelend" then
+    draw_levelend()
+  end
+
+  if (debug != "") print(debug, 100, 120, 6)
+end
+
+function draw_game()
+  cls()
+  
+  draw_stars()
+
+  --map(0,0,0,0,16,16)
+  draw_ui()
+  shake_screen()
+  for ball in all(balls) do
+    ball:draw()
+  end
+  pad:draw()  
+  for brick in all(bricks) do
+    brick:draw()
+  end
+
+  for pow in all(powups) do
+    pow:draw()
+  end
+end
+
+function draw_start()
+  local title = "picobricks"
+  local subtitle = "alpha version" 
+  local cta = "press ❎ to start"
+  cls(0)
+  print(title, 64 - (#title / 2) * 4, 30, 8)
+  print(subtitle, 64 - (#subtitle / 2) * 4, 38, 6)
+  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {1, 12}))
+end
+
+function draw_gameover()
+  local go_text = "game over !"
+  local score_text = "your score: "..score
+  local cta = "press ❎ to try again"
+  rectfill(-8, 30, 128, 72, 0)
+  rect(-8, 30, 128, 72, 6)
+  print(go_text, 64 - (#go_text / 2) * 4, 38, 8)
+  print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
+  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {0, 6}))
+end
+
+function draw_levelend()
+  local lo_text = "stage clear !"
+  local cta = "press ❎ to continue"
+  local score_text = "your score: "..score
+  rectfill(-8, 30, 128, 72, 0)
+  rect(-8, 30, 128, 72, 6)
+  print(lo_text, 64 - (#lo_text / 2) * 4, 38, 11)
+  print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
+  print(cta, 64 - (#cta / 2) * 4, 60, 6)
+end
+
+function draw_ui()
+  rectfill(0, 0, 127, 8, 0)
+  for i=1,lives do print("♥", 4 + 8*i - 8, 2, 8) end
+  handle_score()
+  if powerup != "" then
+  spr(powerup_s, 4, 120)
+  print((powerup_t + 1) / 60, 12, 120, 7)
+  end
+end
+
+function draw_stars()
+	for s in all(stars) do
+		pset(s.x,s.y,s.c)
+		s.y+=s.dy
+		if (s.y>128) del(stars,s)
+	end
+end
+-->8
+------ objects ------
 function make_ball()
   local ball = {
     x = 0,
@@ -954,6 +994,7 @@ function make_stars(n)
 	end
 end
 
+-->8
 ------ juicyness ------
 
 function shake_screen()
@@ -979,6 +1020,40 @@ function blink_text(speed, seq)
     if (blink_ci > #seq) blink_ci = 1
   end
   return seq[blink_ci]
+end
+
+function fadepal(perc)
+  -- o -> normal color
+  -- 1 -> black
+
+  local p = flr(mid(0, perc, 1) * 100)
+
+  -- helper variables
+  local kmax, col, dpal, j ,k
+
+  -- take each color and determine in which color it will fade
+  dpal = {
+    0,1,1,
+    2,1,13,6,
+    4,4,9,3,
+    13,1,13,14
+  }
+
+  -- iterate through colors
+  for j = 1, 15 do
+    -- grab current color
+    col = j
+
+    -- calculate how many times color will be darken
+    kmax = (p + (j * 1.46)) / 22
+    for k = 1, kmax do
+      col = dpal[col]
+    end
+
+    -- change palette
+    pal(j, col)  
+  end
+
 end
 
 __gfx__
@@ -1052,7 +1127,7 @@ __sfx__
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-010d00000c5520c5420c5300c5000c5500c5400c5000c5500c5000c5520c5520c5400c53110541105500c5000e5500c5000e5520e5400e5310c5510c5000c5500c550005000b5500b5510c5510c5520c5420c532
+01100000071760010000100131551515517155101550c1420c1320c1220c112001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
