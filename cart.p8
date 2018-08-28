@@ -4,12 +4,13 @@ __lua__
 ------ comments ------
 -- todo
 -- 7.   more juicyness
---        fade out (in ?)
 --        arrow animation
 --        particles
 --          death
 --          collision
 --          brick shatter
+--          powerup pickup
+--          explosive brick detonation
 --        level setup
 -- 8.   high score
 -- 9.   ui
@@ -59,7 +60,7 @@ __lua__
 -->8
 ------ init ------
 
-local ball, balls, pad, bricks, powups, stars, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, menu_cd, menu_blink_speed, menu_transition, fade, go_cd
+local ball, balls, pad, bricks, powups, stars, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, fade,menu_cd, menu_blink_speed, menu_transition, go_cd, go_transition, preview_f
 
 function _init()
   scene = "start"
@@ -92,9 +93,13 @@ function _init()
 
   -- gameover animation helpers
   go_cd = -1
+  go_transition = 30
 
   -- fading percentage
   fade = 0
+
+  -- preview arrow frame counter
+  preview_f = 0
 end
 
 function start()
@@ -320,6 +325,11 @@ end
 ------ update functions ------
 
 function _update60()
+  if fade != 0 then
+    fade -= 0.05
+    if (fade < 0) fade = 0
+  end
+
   if scene == "game" then
     update_game()
   elseif scene == "start" then
@@ -395,7 +405,6 @@ function update_start()
     menu_blink_speed = 5
 
     if menu_cd <= 0 then
-      fade = 0
       menu_cd = -1
       start()
     end
@@ -404,17 +413,17 @@ end
 
 function update_gameover()
   menu_blink_speed = 20
-  if menu_cd < 0 then
+  if go_cd < 0 then
     if (btnp(5)) then
-      menu_cd = 60
+      go_cd = go_transition
       sfx(13)
     end
   else
-    menu_cd -= 1
+    go_cd -= 1
     menu_blink_speed = 5
-
-    if menu_cd <= 0 then
-      menu_cd = -1
+    fade = (go_transition - go_cd) / go_transition
+    if go_cd <= 0 then
+      go_cd = -1
       scene = "start"
     end
   end
@@ -425,7 +434,7 @@ function update_gameoverwait()
   for star in all(stars) do
     star.dy = 0
   end
-  
+
   go_cd -= 1
 
   if go_cd <= 0 then
@@ -442,9 +451,6 @@ end
 -->8
 ------ draw functions ------
 function _draw()
-  pal()
-  if (fade != 0) fadepal(fade)
-
   if scene == "game" then
     draw_game()
   elseif scene == "start" then 
@@ -457,6 +463,13 @@ function _draw()
     draw_levelend()
   end
 
+  -- fade screen
+  pal()
+  if (fade != 0) fadepal(fade)
+
+  -- show FPS
+  print("fps: "..stat(7), 100, 120, 7)
+  -- debug text
   if (debug != "") print(debug, 100, 120, 6)
 end
 
@@ -694,7 +707,7 @@ function make_ball()
       spr(self.s, self.x - self.r, self.y - self.r)
 
       -- serve preview
-      if (self.stuck) line(self.x + self.vx * 4, self.y + self.vy * 4, self.x + self.vx * 8, self.y + self.vy * 8, 10)
+      if (self.stuck) serve_preview()
     end,
 
     -- check for collision between ball and rect hitboxes
@@ -1051,9 +1064,32 @@ function fadepal(perc)
     end
 
     -- change palette
-    pal(j, col)  
+    pal(j, col, 1)  
   end
 
+end
+
+function serve_preview()
+  local offset, offset2
+  local speed = 30
+
+  preview_f += 1
+
+  if (preview_f > speed) preview_f = 0
+
+  offset = 1 + (2 * (preview_f / speed))
+
+  local preview_f2 = preview_f + 15
+
+  if (preview_f2 > speed) preview_f2 -= speed
+
+  offset2 = 1 + (2 * (preview_f2 / speed))
+
+  pset(balls[1].x + balls[1].vx * 4 * offset,
+       balls[1].y + balls[1].vy * 4 * offset, 10)
+  
+  pset(balls[1].x + balls[1].vx * 4 * offset2,
+       balls[1].y + balls[1].vy * 4 * offset2, 10)
 end
 
 __gfx__
