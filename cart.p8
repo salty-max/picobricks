@@ -60,11 +60,13 @@ __lua__
 -->8
 ------ init ------
 
-local ball, balls, pad, bricks, powups, stars, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, fade,menu_cd, menu_blink_speed, menu_transition, go_cd, go_transition, preview_f
+local balls, pad, bricks, powups, stars, parts, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, fade,menu_cd, menu_blink_speed, menu_transition, go_cd, go_transition, preview_f
 
 function _init()
   scene = "start"
   debug = ""
+
+  parts = {}
 
   levels = {
     "b3xb3xb3/xbxxh1b1h1xxbx/xpxxh1s1h1xxpx/b1h1b1xb3xb1h1b1",
@@ -73,7 +75,7 @@ function _init()
     "b9b2/b9b2/b9b2",
     "x5p1x5/x4b3x4/x1i9",
   }
-  level = 1
+  level = 3
   
   lives = 1
   score = 0
@@ -330,6 +332,10 @@ function _update60()
     if (fade < 0) fade = 0
   end
 
+  for part in all(parts) do
+    part:update()
+  end
+
   if scene == "game" then
     update_game()
   elseif scene == "start" then
@@ -448,6 +454,7 @@ function update_levelend()
   camera(0, 0)
   shake = 0
 end
+
 -->8
 ------ draw functions ------
 function _draw()
@@ -468,7 +475,7 @@ function _draw()
   if (fade != 0) fadepal(fade)
 
   -- show FPS
-  print("fps: "..stat(7), 100, 120, 7)
+  --print("fps: "..stat(7), 100, 120, 7)
   -- debug text
   if (debug != "") print(debug, 100, 120, 6)
 end
@@ -476,15 +483,22 @@ end
 function draw_game()
   cls()
   
-  draw_stars()
-
+  --draw_stars()
   --map(0,0,0,0,16,16)
+
   draw_ui()
   shake_screen()
+
+  for part in all(parts) do
+    part:draw()
+  end
+
   for ball in all(balls) do
     ball:draw()
   end
+
   pad:draw()  
+
   for brick in all(bricks) do
     brick:draw()
   end
@@ -672,6 +686,10 @@ function make_ball()
           self.x = nextx
           self.y = nexty
         end
+
+        -- trail particles
+        --if (powerup == "meg") spawn_trail(nextx, nexty)
+        spawn_trail(nextx, nexty, 1)
       end
 
       -- ball falls out of screen
@@ -1007,6 +1025,39 @@ function make_stars(n)
 	end
 end
 
+function make_part(x, y, t, mage, colors)
+  local part = {
+    x = x,
+    y = y,
+    t = t,
+    colors = colors,
+    c = 0,
+    age = 0,
+    mage = mage,
+
+    update = function(self)
+      self.age += 1
+      if (self.age >= self.mage) del(parts, self)
+
+      if #self.colors == 1 then
+        self.c = self.colors[1]
+      else
+        local ci = 1 + flr((self.age / self.mage) * #colors)
+        self.c = self.colors[ci]
+      end
+    end,
+
+    draw = function(self)
+      --pixel particle
+      if self.t == 0 then
+        pset(self.x, self.y, self.c)
+      end
+    end
+  }
+  add(parts, part)
+  debug = #parts
+end
+
 -->8
 ------ juicyness ------
 
@@ -1090,6 +1141,15 @@ function serve_preview()
   
   pset(balls[1].x + balls[1].vx * 4 * offset2,
        balls[1].y + balls[1].vy * 4 * offset2, 10)
+end
+
+function spawn_trail(x, y, rate)
+  if rnd() < rate then
+    local ang = rnd()
+    local ox = sin(ang) * 2 * 0.3
+    local oy = cos(ang) * 2 * 0.3
+    make_part(x + ox, y + oy, 0, 10 + rnd(10), {10, 9, 8})
+  end
 end
 
 __gfx__
