@@ -4,14 +4,11 @@ __lua__
 ------ comments ------
 -- todo
 -- 7.   more juicyness
---        arrow animation
 --        particles
 --          death
---          collision
---          brick shatter
+--          puffts
 --          powerup pickup
 --          explosive brick detonation
---        level setup
 -- 8.   high score
 -- 9.   ui
 --        combo text
@@ -60,7 +57,7 @@ __lua__
 -->8
 ------ init ------
 
-local balls, pad, bricks, powups, stars, parts, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, fade,menu_cd, menu_blink_speed, menu_transition, go_cd, go_transition, preview_f
+local balls, pad, bricks, powups, stars, parts, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, fade,menu_cd, menu_blink_speed, menu_transition, go_cd, go_transition, preview_f, lasthit_x, lasthit_y
 
 function _init()
   scene = "start"
@@ -75,7 +72,7 @@ function _init()
     "b9b2/b9b2/b9b2",
     "x5p1x5/x4b3x4/x1i9",
   }
-  level = 3
+  level = 1
   
   lives = 1
   score = 0
@@ -102,6 +99,10 @@ function _init()
 
   -- preview arrow frame counter
   preview_f = 0
+
+  -- ball momentum
+  lasthit_x = 0
+  lasthit_y = 0
 end
 
 function start()
@@ -216,8 +217,13 @@ function handle_score()
   print("score: "..score, 72, 2, 6)
 end
 
-function hit_brick(b, combo)
+function hit_brick(b, ball, combo)
   -- check brick type on hit and apply behavior based on it
+
+  local flash_t = 8
+  b.ox = ball.vx
+  b.oy = ball.vy
+
   if b.t == "b" then
     sfx(3 + (chain - 1))
     if combo then
@@ -225,7 +231,10 @@ function hit_brick(b, combo)
       chain += 1
       chain = mid(1, chain, 8)
     end
-    del(bricks, b)
+    shake += 0.1
+    b.flash = flash_t
+    shatter_brick(b, lasthit_x, lasthit_y)
+    b.v = false
   elseif b.t == 's' then
     b.t = "rex"
     sfx(3 + (chain - 1))
@@ -241,7 +250,10 @@ function hit_brick(b, combo)
         chain += 1
         chain = mid(1, chain, 8)
       end
-      del(bricks, b)
+      shake += 0.1
+      b.flash = flash_t
+      shatter_brick(b, lasthit_x, lasthit_y)
+      b.v = false
     else
       b.t = "b"
     end
@@ -255,8 +267,11 @@ function hit_brick(b, combo)
       chain += 1
       chain = mid(1, chain, 8)
     end
-    b:spawn_pill("spd")
-    del(bricks, b)
+    b:spawn_pill()
+    shake += 0.1
+    b.flash = flash_t
+    shatter_brick(b, lasthit_x, lasthit_y)
+    b.v = false
   end
 end
 
@@ -266,7 +281,7 @@ function check_explosions()
   for brick in all(bricks) do
     if brick.t == "rex" then
       brick.t = "ex"
-    elseif brick.t == "ex" then
+    elseif brick.t == "ex" and brick.v then
       explode_bricks(brick)
       shake += 0.4
       if (shake > 1) shake = 1
@@ -277,13 +292,15 @@ function check_explosions()
 end
 
 function explode_bricks(b)
-  -- explosion spread management
-  for brick in all(bricks) do
-    if brick.id != b.id and abs(brick.x - b.x) <= brick.w + 1 and abs(brick.y - b.y) <= brick.h + 1 then
-      hit_brick(brick, false)
+  b.v = false
+  for ball in all(balls) do
+    -- explosion spread management
+    for brick in all(bricks) do
+      if brick.id != b.id and brick.v and abs(brick.x - b.x) <= brick.w + 1 and abs(brick.y - b.y) <= brick.h + 1 then
+        hit_brick(brick, ball, false)
+      end
     end
   end
-  del(bricks, b)
 end
 
 function collide(a, b)
@@ -363,9 +380,10 @@ function update_game()
   for brick in all(bricks) do
     brick:update()
     brick:set_type()
+    brick:animate()
 
     -- remove indestructiblr bricks from bricks counter
-    if (brick.t != "i") add(dest_bricks, brick)
+    if (brick.t != "i" and brick.v) add(dest_bricks, brick)
   end
 
   for pow in all(powups) do
@@ -652,11 +670,15 @@ function make_ball()
 
         local brick_hit = false
         for brick in all(bricks) do 
-          if self:bounce(nextx, nexty, brick) then
+          if brick.v and self:bounce(nextx, nexty, brick) then
             -- check if ball hits brick
             -- find out which direction ball will deflect
             if not brick_hit then
               if (powerup == "meg" and brick.t == "i") or powerup != "meg" then
+                -- save ball momentum on impact
+                lasthit_x = self.vx
+                lasthit_y = self.vy
+
                 if self:deflect(brick) then
                   -- ball hits brick sideways
                   self.vx = -self.vx
@@ -680,7 +702,8 @@ function make_ball()
             end
 
             brick_hit = true
-            hit_brick(brick, true)
+
+            hit_brick(brick, self, true)
           end
 
           self.x = nextx
@@ -870,27 +893,42 @@ function make_brick(id, x, y, w, h, t)
     id = id,
     x = x,
     y = y,
+    dx = 0,
+    dy = 1 + flr(rnd(64)),
+    ox = 0,
+    oy = -(128 + flr(rnd(32))),
     w = w,
     h = h,
     t = t,
-    --hp = 0,
     c = 0,
     sx = 0,
     sy = 0,
     pts = 0,
-    --v = true,
+    flash = 0,
+    v = true,
 
     update = function(self)
     end,
 
     draw = function(self)
       palt(0, false)
-      sspr(self.sx, self.sy, self.w, self.h, self.x, self.y)
+
+      -- bounce calculation
+      local bx = self.x + self.ox
+      local by = self.y + self.oy
+      
+      if self.v or self.flash > 0 then
+        sspr(self.sx, self.sy, self.w, self.h, bx, by)
+      end
       palt()
     end,
 
     set_type = function(self)
-      if self.t == "b" then
+      if self.flash > 0 then
+        self.sx = 58
+        self.c = 7
+        self.flash -= 1
+      elseif self.t == "b" then
         self.sx = 8
         self.c = 14
         --self.hp = 1
@@ -923,6 +961,38 @@ function make_brick(id, x, y, w, h, t)
       local types = {"spd", "1up", "sty", "exp", "rdc", "meg", "mlt"}
       add(powups, make_powup(types[flr(rnd(7)) + 1], self.x + self.w / 2, self.y + self.h + 2))
       --types[flr(rnd(7)) + 1]
+    end,
+
+    animate = function(self)
+      if self.v or self.flash > 0 then
+        -- check if brick is moving
+        if self.dx != 0 or self.dy != 0 or
+           self.ox != 0 or self.oy != 0 then
+           -- apply speed
+          self.ox += self.dx
+          self.oy += self.dy
+
+          -- change the speed
+          -- brick wants to go to zero
+          self.dx -= self.ox / 10
+          self.dy -= self.oy / 10
+
+          -- dampening
+          if (abs(self.dx) > abs(self.ox)) self.dx /= 1.5
+          if (abs(self.dy) > abs(self.oy)) self.dy /= 1.5
+
+          -- snap position to zero if close
+          if abs(self.ox) < 0.5 and abs(self.dx) < 0.25 then
+            self.ox = 0
+            self.dx = 0
+          end
+
+          if abs(self.oy) < 0.5 and abs(self.dy) < 0.25 then
+            self.oy = 0
+            self.dy = 0
+          end
+        end
+      end
     end
   }
 
@@ -1025,19 +1095,27 @@ function make_stars(n)
 	end
 end
 
-function make_part(x, y, t, mage, colors)
+function make_part(x, y, dx, dy, t, mage, colors)
   local part = {
     x = x,
     y = y,
+    dx = dx,
+    dy = dy,
     t = t,
     colors = colors,
     c = 0,
     age = 0,
     mage = mage,
+    rot = 0,
+    rot_timer = 0,
 
     update = function(self)
       self.age += 1
-      if (self.age >= self.mage) del(parts, self)
+      if self.age >= self.mage or
+         self.x < -20 or self.x > 148 or
+         self.y < -20 or self.y > 148 then
+        del(parts, self)
+      end
 
       if #self.colors == 1 then
         self.c = self.colors[1]
@@ -1045,12 +1123,48 @@ function make_part(x, y, t, mage, colors)
         local ci = 1 + flr((self.age / self.mage) * #colors)
         self.c = self.colors[ci]
       end
+
+      -- gravity
+      if (self.t != 0) self.dy += 0.075
+
+      --rotation
+      if self.t == 3 then
+        self.rot_timer += 1
+
+        if self.rot_timer > 60 then
+          self.rot += 1
+
+          if (self.rot > 4) self.rot = 0
+        end
+      end
+
+      -- velocity
+      self.x += self.dx
+      self.y += self.dy
     end,
 
     draw = function(self)
       --pixel particle
-      if self.t == 0 then
+      if self.t == 0 or self.t == 1 then
         pset(self.x, self.y, self.c)
+      elseif self.t == 3 then
+        local fx, fy
+
+        if self.rot == 2 then
+          fx = false
+          fy = true
+        elseif self.rot == 3 then
+          fx = true
+          fy = true
+        elseif self.rot == 4 then
+          fx = true
+          fy = false
+        else
+          fx = false
+          fy = false
+        end
+
+        spr(self.c, self.x, self.y, 1, 1, fx, fy)
       end
     end
   }
@@ -1148,16 +1262,42 @@ function spawn_trail(x, y, rate)
     local ang = rnd()
     local ox = sin(ang) * 2 * 0.3
     local oy = cos(ang) * 2 * 0.3
-    make_part(x + ox, y + oy, 0, 10 + rnd(10), {10, 9, 8})
+    make_part(x + ox, y + oy, 0, 0, 0, 10 + rnd(10), {10, 9, 8})
+  end
+end
+
+function shatter_brick(b, vx, vy)
+  b.dx = vx
+  b.dy = vy
+  for _x = 0, b.w do
+    for _y = 0, b.h do
+      if rnd() < 0.5 then
+        local ang = rnd()
+        local dx = sin(ang) * rnd(2) + vx
+        local dy = cos(ang) * rnd(2) + vy
+        make_part(b.x + _x, b.y + _y, dx ,dy, 1, 60, {7, 6, 5})
+      end
+    end
+  end
+
+  local chunks = 1 + flr(rnd(3))
+  if chunks > 0 then
+    for i = 1, chunks do
+      local ang = rnd()
+      local dx = sin(ang) * rnd(2) + vx
+      local dy = cos(ang) * rnd(2) + vy
+      local spr = 64 + flr(rnd(5))
+      make_part(b.x, b.y, dx, dy, 3, 60, {spr})
+    end
   end
 end
 
 __gfx__
-00000000277777777717777777775aa55aa55a377777777757777777770000000000000000000000000000000000000000000000000000000000000000550055
-000000002eeeeeeee71cccccccc799009900993bbbbbbbb756dd66dd670000000000000000000000000000000000000000000000000000000000000005500550
-007007002eeeeeeee71cccccccc790099009903bbbbbbbb75dd66dd6670000000000000000000000000000000000000000000000000000000000000055005500
-000770002eeeeeeee71cccccccc700990099003bbbbbbbb75d66dd66d70000000000000000000000000000000000000000000000000000000000000050055005
-00077000222222222711111111170440044004333333333755555555570000000000000000000000000000000000000000000000000000000000000000550055
+00000000277777777717777777775aa55aa55a377777777757777777777777777777000000000000000000000000000000000000000000000000000000550055
+000000002eeeeeeee71cccccccc799009900993bbbbbbbb756dd66dd677777777777000000000000000000000000000000000000000000000000000005500550
+007007002eeeeeeee71cccccccc790099009903bbbbbbbb75dd66dd6677777777777000000000000000000000000000000000000000000000000000055005500
+000770002eeeeeeee71cccccccc700990099003bbbbbbbb75d66dd66d77777777777000000000000000000000000000000000000000000000000000050055005
+00077000222222222711111111170440044004333333333755555555577777777777000000000000000000000000000000000000000000000000000000550055
 00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005500550
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000055005500
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000050055005
@@ -1182,6 +1322,12 @@ aaa70000eeef00000000000000000000000000000000000000000000000000000000000000000000
 69996000677760006bbb60006eee6000688860006ccc60006aaa6000000000000000000000000000000000000000000000000000000000000000000000000000
 59996000577760005bbb60005eee6000588860005ccc60005aaa6000000000000000000000000000000000000000000000000000000000000000000000000000
 05660000056600000566000005660000056600000566000005660000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+77700000070000000777000007700000777000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+77000000777000007777000077700000077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+70000000770000000000000077770000007000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __gff__
 0002020202020002020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
