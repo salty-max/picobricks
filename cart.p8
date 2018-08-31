@@ -72,7 +72,7 @@ function _init()
     "b9b2/b9b2/b9b2",
     "x5p1x5/x4b3x4/x1i9",
   }
-  level = 1
+  level = 3
   
   lives = 1
   score = 0
@@ -1007,6 +1007,7 @@ function make_powup(t, x, y)
     w = 4,
     h = 4,
     s = 0,
+    c = {},
     t = t,
 
     update = function(self)
@@ -1017,6 +1018,7 @@ function make_powup(t, x, y)
 
       if collide(self, pad) then
         self:activate()
+        spawn_colored_smoke(self.x, self.y, self.c)
         sfx(12)
         del(powups, self)
       end
@@ -1026,18 +1028,25 @@ function make_powup(t, x, y)
       -- pill sprite management
       if self.t == "spd" then
         self.s = 48
+        self.c = {9, 4}
       elseif self.t == "1up" then
         self.s = 49
+        self.c = {7, 6}
       elseif self.t == "sty" then
         self.s = 50
+        self.c = {11, 3}
       elseif self.t == "exp" then
         self.s = 51
+        self.c = {14, 2}
       elseif self.t == "rdc" then
         self.s = 52
+        self.c = {8, 2}
       elseif self.t == "meg" then
         self.s = 53
+        self.c = {12, 1}
       elseif self.t == "mlt" then
         self.s = 54
+        self.c = {10, 9}
       end
       spr(self.s, self.x, self.y)
     end,
@@ -1064,7 +1073,7 @@ function make_powup(t, x, y)
         self:reset(self.t, 600)
         -- reduce paddle
       elseif self.t == "meg" then -- megaball
-        self:reset(self.t, 600)
+        self:reset(self.t, 120)
         -- megaball
       elseif self.t == "mlt" then -- multiball
         -- multiball
@@ -1075,7 +1084,7 @@ function make_powup(t, x, y)
 
     reset = function(self, type, timer)
       powerup = type
-      powerup_t = 600
+      powerup_t = timer
       powerup_s = self.s
     end
   }
@@ -1118,12 +1127,15 @@ function make_part(x, y, dx, dy, t, mage, colors, size)
 
     update = function(self)
       self.age += 1
+
+      -- particle gets old and die
       if self.age >= self.mage or
          self.x < -20 or self.x > 148 or
          self.y < -20 or self.y > 148 then
         del(parts, self)
       end
 
+      -- change color
       if #self.colors == 1 then
         self.c = self.colors[1]
       else
@@ -1190,7 +1202,6 @@ function make_part(x, y, dx, dy, t, mage, colors, size)
     end
   }
   add(parts, part)
-  debug = #parts
 end
 
 -->8
@@ -1283,7 +1294,14 @@ function spawn_trail(x, y, rate)
     local ang = rnd()
     local ox = sin(ang) * 2 * 0.3
     local oy = cos(ang) * 2 * 0.3
-    make_part(x + ox, y + oy, 0, 0, 0, 10 + rnd(10), {10, 9, 8}, 0)
+    
+    if powerup == "meg" then
+      ox = sin(ang) * 2
+      oy = cos(ang) * 2
+      make_part(x + ox, y + oy, 0, 0, 2, 30 + rnd(10), {10, 9, 8}, 1 + rnd(1))
+    else
+      make_part(x + ox, y + oy, 0, 0, 0, 10 + rnd(10), {10, 9, 8}, 0)
+    end
   end
 end
 
@@ -1296,8 +1314,19 @@ function spawn_pufft(x, y)
   end
 end
 
+function spawn_colored_smoke(x, y, c)
+  for i = 0, 20 do
+    local ang = rnd()
+    local dx = sin(ang) * 0.5
+    local dy = cos(ang) * 0.5  
+    make_part(x, y, dx ,dy, 2, 20 + rnd(15), c, 1 + rnd(4))
+  end
+end
+
 function shatter_brick(b, vx, vy)
-  shake += 0.075
+  if shake < 1 then
+    shake += 0.075
+  end
   sfx(14)
 
   b.dx = vx
