@@ -3,20 +3,19 @@ version 16
 __lua__
 ------ comments ------
 -- todo
--- 7.   more juicyness
---        particles
---          death
---          powerup pickup
---          explosive brick detonation
--- 8.   high score
 -- 9.   ui
 --        combo text
 --        powerup text
 --        powerup %bar
 -- 10.  better collisions
 -- 11.  gameplay tweaks
--- 12.   timer
---        smaller paddle ?  
+--        timer
+--        smaller paddle ?
+-- 12.  level design
+-- 13.  sounds
+--        level over fanfare
+--        high score screen music
+--        start screen music  
 
 -- brick types
 -- b -> regular
@@ -53,17 +52,26 @@ __lua__
 -- 12 -> powerup pickup
 -- 13 -> start game
 -- 14 -> brick shatter
+-- 15 -> confirm
+-- 16 -> menu blip
+-- 17 -> error
+-- 18 -> menu bloop
+-- 19 -> woosh
 
 -->8
 ------ init ------
 
-local balls, pad, bricks, powups, stars, parts, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, fade,menu_cd, menu_blink_speed, menu_transition, go_cd, go_transition, preview_f, lasthit_x, lasthit_y
+local balls, pad, bricks, powups, stars, parts, lives, score, mult, chain, levels, level, scene, debug, powerup, powerup_t, shake, blink_f, blink_ci, fade,menu_cd, menu_blink_speed, menu_transition, go_cd, go_transition, preview_f, lasthit_x, lasthit_y, hs, hsc, hs_x, hs_dx, hschars, initials, selected_initial,loghs, name_confirm
 
 function _init()
+  -- save file
+  cartdata("picobricks")
+
   scene = "start"
   debug = ""
 
   parts = {}
+  stars = {}
 
   levels = {
     "b3xb3xb3/xbxxh1b1h1xxbx/xpxxh1s1h1xxpx/b1h1b1xb3xb1h1b1",
@@ -71,11 +79,12 @@ function _init()
     "b9b2/x1p9",
     "b9b2/b9b2/b9b2",
     "x5p1x5/x4b3x4/x1i9",
+    "x5b1x5/x3s5x3",
   }
-  level = 3
+  level = 6
   
-  lives = 1
-  score = 0
+  lives = 3
+  score = 4000
   mult = 1
 
   -- screenshake intensity
@@ -92,10 +101,10 @@ function _init()
 
   -- gameover animation helpers
   go_cd = -1
-  go_transition = 30
+  go_transition = 60
 
   -- fading percentage
-  fade = 0
+  fade = 1
 
   -- preview arrow frame counter
   preview_f = 0
@@ -103,6 +112,24 @@ function _init()
   -- ball momentum
   lasthit_x = 0
   lasthit_y = 0
+
+  -- high score
+  hs = {}
+  hsc = {
+    c1 = {},
+    c2 = {},
+    c3 = {} 
+  }
+  hsb = {true, false, false, false, false}
+  initials = {1, 1, 1}
+  selected_initial = 1
+  hs_x = 128
+  hs_dx = 128
+  hschars = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"}
+  loghs = true
+  name_confirm = false
+  --reseths()
+  loadhs()
 end
 
 function start()
@@ -115,15 +142,25 @@ function start()
   balls = {}
   bricks = {}
   powups = {}
-  stars = {}
   chain = 1
-  score = 0
+  shake = 0
 
   pad = make_pad()
   build_bricks(levels[level], brick_w, brick_h, brick_offset)
 
   -- reset game
   serve_ball()
+end
+
+function islevelfinished()
+ if #bricks == 0 then return true end
+ 
+ for b in all(bricks) do
+  if b.v == true and b.t != "i" then
+   return false
+  end
+ end
+ return true
 end
 
 function nextlevel()
@@ -136,6 +173,28 @@ function gameover()
   scene = "gameoverwait"
   go_cd = 60
   sfx(20)
+  resethsb()
+end
+
+function levelover()
+  scene = "leveloverwait"
+  go_cd = 60
+end
+
+function wingame()
+  scene = "winscreenwait"
+  go_cd = 120
+  level = 1
+
+  -- is score good enough for high scores
+  if score > hs[5] then
+    loghs = true
+    selected_initial = 1
+    name_confirm = false
+  else
+    loghs = false
+    resethsb()
+  end
 end
 
 function serve_ball()
@@ -237,6 +296,7 @@ function hit_brick(b, ball, combo)
   elseif b.t == 's' then
     b.t = "rex"
     sfx(3 + (chain - 1))
+    --shatter_brick(b, lasthit_x, lasthit_y)
     if combo then
       score += (b.pts * chain) * mult
       chain += 1
@@ -280,8 +340,9 @@ function check_explosions()
       brick.t = "ex"
     elseif brick.t == "ex" and brick.v then
       explode_bricks(brick)
-      shake += 0.4
-      if (shake > 1) shake = 1
+      spawn_explosion(brick.x, brick.y)
+      sfx(14)
+      if (shake < 0.4) shake += 0.1
     elseif brick.t == "rex" then
       brick.t = "ex"
     end 
@@ -358,15 +419,19 @@ function _update60()
     update_gameoverwait()
   elseif scene == "gameover" then
     update_gameover()
+  elseif scene == "leveloverwait" then
+    update_leveloverwait()
   elseif scene == "levelend" then
-    shake = 0
-    camera()
     update_levelend()
+  elseif scene == "winscreenwait" then
+    update_winscreenwait()
+  elseif scene == "winscreen" then
+    update_winscreen()
   end
 end
 
 function update_game()
-  local dest_bricks = {}
+  check_explosions()
 
   for ball in all(balls) do
     ball:update()
@@ -378,26 +443,20 @@ function update_game()
     brick:update()
     brick:set_type()
     brick:animate()
-
-    -- remove indestructiblr bricks from bricks counter
-    if (brick.t != "i" and brick.v) add(dest_bricks, brick)
   end
 
   for pow in all(powups) do
     pow:update()
   end
 
-  make_stars(1)
-
-  if (#dest_bricks < 1) then 
-    
+  if islevelfinished() then
     if level == #levels then
       -- todo
       -- nice end game screen
-      scene = "start"
+      wingame()
     else
       _draw()
-      scene = "levelend"
+      levelover()
     end
   end
 
@@ -430,6 +489,33 @@ function update_start()
       start()
     end
   end
+
+  if hs_x != hs_dx then
+    hs_x += (hs_dx - hs_x) / 5
+    if abs(hs_dx-hs_x) < 0.3 then
+      hs_x=hs_dx
+    end
+  end
+
+  if btnp(0) then
+    if hs_dx != 0 then
+      sfx(19)
+      hs_dx = 0
+    else
+      sfx(17)
+    end
+  end
+
+  if btnp(1) then
+    if hs_dx != 128 then
+      sfx(19)
+      hs_dx = 128
+    else
+      sfx(17)
+    end
+  end
+  debug = hs_x
+  make_stars(1)
 end
 
 function update_gameover()
@@ -437,7 +523,7 @@ function update_gameover()
   if go_cd < 0 then
     if (btnp(5)) then
       go_cd = go_transition
-      sfx(13)
+      sfx(15)
     end
   else
     go_cd -= 1
@@ -451,6 +537,15 @@ function update_gameover()
 end
 
 function update_gameoverwait()
+  go_cd -= 1
+
+  if go_cd <= 0 then
+    go_cd = -1
+    scene = "gameover"
+  end
+end
+
+function update_leveloverwait()
   -- stop background scrolling
   for star in all(stars) do
     star.dy = 0
@@ -460,14 +555,109 @@ function update_gameoverwait()
 
   if go_cd <= 0 then
     go_cd = -1
-    scene = "gameover"
+    scene = "levelend"
   end
 end
 
 function update_levelend()
-  if (btnp(5)) nextlevel()
-  camera(0, 0)
-  shake = 0
+  menu_blink_speed = 20
+  if go_cd < 0 then
+    if (btnp(5)) then
+      go_cd = go_transition
+      sfx(15)
+    end
+  else
+    go_cd -= 1
+    menu_blink_speed = 5
+    fade = (go_transition - go_cd) / go_transition
+    if go_cd <= 0 then
+      go_cd = -1
+      nextlevel()
+    end
+  end
+end
+
+function update_winscreenwait()
+  go_cd -= 1
+
+  if (go_cd <= 20) fade = (go_transition - go_cd) / go_transition
+
+  if go_cd <= 0 then
+    go_cd = -1
+    scene = "winscreen"
+  end
+end
+
+function update_winscreen()
+  menu_blink_speed = 30
+
+  if go_cd < 0 then
+    if loghs then
+
+      -- select previous initial
+      if btnp(0) then
+        name_confirm = false
+        selected_initial -= 1
+        if (selected_initial < 1) selected_initial = 3
+        sfx(16)
+
+      -- select next initial
+      elseif btnp(1) then
+        name_confirm = false
+        selected_initial += 1
+        if (selected_initial > 3) selected_initial = 1
+        sfx(16)
+
+      -- move down in alphabet
+      elseif btnp(2) then
+        name_confirm = false
+        initials[selected_initial] -= 1
+        if (initials[selected_initial] < 1) initials[selected_initial] = #hschars
+        sfx(18)
+
+      -- move up in alphabet
+      elseif btnp(3) then
+        name_confirm = false
+        initials[selected_initial] += 1
+        if (initials[selected_initial] > #hschars) initials[selected_initial] = 1
+        sfx(18)
+
+      -- cancel name confirmation
+      elseif btnp(4) then
+        name_confirm = false
+        sfx(17)
+
+      -- first press -> confirm modal
+      -- second press -> return to title
+      elseif btnp(5) then
+        if name_confirm then
+          addhs(score, initials[1], initials[2], initials[3])
+          savehs()
+          go_cd = go_transition
+          sfx(15)
+        else
+          name_confirm = true
+          sfx(16)
+        end
+      end
+    else
+      if (btnp(5)) then
+        go_cd = go_transition
+        sfx(15)
+      end
+    end
+  else
+    go_cd -= 1
+    menu_blink_speed = 5
+    fade = (go_transition - go_cd) / go_transition
+
+    if go_cd <= 0 then
+      go_cd = -1
+      scene = "start"
+      hs_x = 128
+      hs_dx = 0
+    end
+  end
 end
 
 -->8
@@ -481,25 +671,30 @@ function _draw()
     draw_game()
   elseif scene == "gameover" then
     draw_gameover()
+  elseif scene == "leveloverwait" then
+    draw_game()
   elseif scene == "levelend" then
     draw_levelend()
+  elseif scene == "winscreenwait" then
+    draw_game()
+  elseif scene == "winscreen" then
+    draw_winscreen()
   end
 
   -- fade screen
   pal()
   if (fade != 0) fadepal(fade)
 
-  -- show FPS
+  -- show fps
   --print("fps: "..stat(7), 100, 120, 7)
   -- debug text
   if (debug != "") print(debug, 100, 120, 6)
 end
 
 function draw_game()
-  cls()
+  cls(1)
   
   --draw_stars()
-  map(0,0,0,0,16,16)
 
   draw_ui()
   shake_screen()
@@ -527,10 +722,18 @@ function draw_start()
   local title = "picobricks"
   local subtitle = "alpha version" 
   local cta = "press ❎ to start"
-  cls(0)
-  print(title, 64 - (#title / 2) * 4, 30, 8)
-  print(subtitle, 64 - (#subtitle / 2) * 4, 38, 6)
-  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {1, 12}))
+  local hs_show = "⬅️ high scores"
+  local hs_hide = "➡️ hide scores"
+  cls()
+  draw_stars()
+  print(title, 64 - (#title / 2) * 4, 16, 8)
+  print(subtitle, 64 - (#subtitle / 2) * 4, 24, 6)
+  print(cta, 64 - (#cta / 2) * 4, 40, blink_text(menu_blink_speed, {1, 12}))
+  print(hs_show, (64 - (#hs_show / 2) * 4) + (hs_x - 128), 52, 14)
+  print(hs_hide, (64 - (#hs_hide / 2) * 4) + (hs_x), 52, 6)
+
+  drawhs(hs_x)
+  
 end
 
 function draw_gameover()
@@ -552,7 +755,57 @@ function draw_levelend()
   rect(-8, 30, 128, 72, 6)
   print(lo_text, 64 - (#lo_text / 2) * 4, 38, 11)
   print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
-  print(cta, 64 - (#cta / 2) * 4, 60, 6)
+  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {0, 6}))
+end
+
+function draw_winscreen()
+  cls()
+  map(0, 0, 0, 0, 16, 16)
+  local win_text = "★ congratulations ★"
+  local win_text2 = "you have beaten the game"
+  local nohs_text = "but you don't deserve a place"
+  local nohs_text2 = "in the hall of fame"
+  local hs_text = "enter your initials"
+  local hs_text2 = "for the hall of fame"
+  local hint_text = "⬅️➡️⬆️⬇️ move"
+  local hint_text2 = "❎ confirm  🅾️ cancel"
+  local cta = "press ❎ to confirm"
+  local score_text = "your score: "..score
+  
+  print(win_text, 22, 16, 14)
+  print(win_text2, 64 - (#win_text2 / 2) * 4, 24, 6)
+
+  if loghs then
+    -- won and beat lowest high score
+    print(score_text, 64 - (#score_text / 2) * 4, 40, 11)
+    print(hs_text, 64 - (#hs_text / 2) * 4, 56, 6)
+    print(hs_text2, 64 - (#hs_text2 / 2) * 4, 64, 6)
+
+    local colors = {6 ,6 ,6}
+    if name_confirm then
+      local blink = blink_text(menu_blink_speed, {4, 9})
+      colors = {blink ,blink ,blink}
+    else
+      colors[selected_initial] = blink_text(menu_blink_speed, {4, 9})
+    end
+
+    print(hschars[initials[1]], 58, 82, colors[1])
+    print(hschars[initials[2]], 62, 82, colors[2])
+    print(hschars[initials[3]], 66, 82, colors[3])
+
+    if name_confirm then
+      print(cta, 64 - (#cta / 2) * 4, 104, blink_text(menu_blink_speed, {4, 9}))
+    else
+      print(hint_text, 16, 104, 3)
+      print(hint_text2, 16, 112, 3)
+    end
+  else
+    -- won but score not high enough
+    print(score_text, 64 - (#score_text / 2) * 4, 48, 8)
+    print(nohs_text, 64 - (#nohs_text / 2) * 4, 64, 6)
+    print(nohs_text2, 64 - (#nohs_text2 / 2) * 4, 72, 6)
+    print(cta, 64 - (#cta / 2) * 4, 104, blink_text(menu_blink_speed, {4, 9}))
+  end
 end
 
 function draw_ui()
@@ -562,6 +815,22 @@ function draw_ui()
   if powerup != "" then
   spr(powerup_s, 4, 120)
   print((powerup_t + 1) / 60, 12, 120, 7)
+  end
+end
+
+function drawhs(x)
+  for i = 1, 5 do
+    local hst = "high scores"
+    local hscol = 7
+    if (hsb[i]) hscol = blink_text(menu_blink_speed, {2, 14})
+    local name = hschars[hsc.c1[i]]..hschars[hsc.c2[i]]..hschars[hsc.c3[i]]
+    rectfill(x + 32, 62, x + 98, 70, 14)
+    print(hst, x + 66 - (#hst / 2) * 4, 64, 0)
+    -- rank + name
+    print(i.."    "..name, x + 32, 68 + (i * 8), hscol)
+    -- score
+    local score = " "..hs[i]
+    print(score, x + 100 - (#score * 4), 68 + (i * 8), hscol)
   end
 end
 
@@ -699,11 +968,10 @@ function make_ball()
                   end
                 end
               end
+              brick_hit = true
+
+              hit_brick(brick, self, true)
             end
-
-            brick_hit = true
-
-            hit_brick(brick, self, true)
           end
 
           self.x = nextx
@@ -717,6 +985,7 @@ function make_ball()
 
       -- ball falls out of screen
       if self.y > 127 then
+        spawn_death(self.x, self.y)
         if #balls > 1 then
           sfx(2)
           shake += 0.2
@@ -732,8 +1001,6 @@ function make_ball()
         end
         end
       end
-
-      check_explosions()
     end,
 
     draw = function(self)
@@ -1056,7 +1323,7 @@ function make_powup(t, x, y)
     activate = function(self)
       if self.t == "spd" then     -- speed down
         -- slow down ball
-        self:reset(self.t, 600)
+        self:reset(self.t, 300)
       elseif self.t == "1up" then -- extra life
         lives += 1
       elseif self.t == "sty" then -- sticky ball
@@ -1164,9 +1431,9 @@ function make_part(x, y, dx, dy, t, mage, colors, size)
       end
 
       -- friction
-      if self.type == 2 then
-        self.dx /= 1.2
-        self.dy /= 1.2
+      if self.t == 2 then
+        self.dx = self.dx / 1.2
+        self.dy = self.dy / 1.2
       end
 
       -- velocity
@@ -1229,6 +1496,7 @@ function blink_text(speed, seq)
 
     if (blink_ci > #seq) blink_ci = 1
   end
+
   return seq[blink_ci]
 end
 
@@ -1308,8 +1576,8 @@ end
 function spawn_pufft(x, y)
   for i = 0, 5 do
     local ang = rnd()
-    local dx = sin(ang) * 0.5
-    local dy = cos(ang) * 0.5
+    local dx = sin(ang) * 1.5
+    local dy = cos(ang) * 1.5
     make_part(x, y, dx ,dy, 2, 15 + rnd(15), {7, 6, 5}, 1 + rnd(2))
   end
 end
@@ -1317,15 +1585,40 @@ end
 function spawn_colored_smoke(x, y, c)
   for i = 0, 20 do
     local ang = rnd()
-    local dx = sin(ang) * 0.5
-    local dy = cos(ang) * 0.5  
-    make_part(x, y, dx ,dy, 2, 20 + rnd(15), c, 1 + rnd(4))
+    local dx = sin(ang) * 2
+    local dy = cos(ang) * 2 
+    make_part(x, y, dx ,dy, 2, 30 + rnd(15), c, 1 + rnd(4))
+  end
+end
+
+function spawn_death(x, y)
+  for i = 0, 30 do
+    local ang = rnd()
+    local dy = cos(ang) * (2 + rnd(4))
+    local dx = sin(ang) * (2 + rnd(4))
+    make_part(x, y, dx ,dy, 2, 80 + rnd(15), {10, 9, 8, 0}, 2 + rnd(4))
+  end
+end
+
+function spawn_explosion(x, y)
+  for i = 0, 20 do
+    local ang = rnd()
+    local dy = cos(ang) * rnd(4)
+    local dx = sin(ang) * rnd(4)
+    make_part(x, y, dx ,dy, 2, 80 + rnd(15), {0, 0, 5, 5, 6}, 3 + rnd(6))
+  end
+
+  for i = 0, 30 do
+    local ang = rnd()
+    local dy = cos(ang) * (1 + rnd(4))
+    local dx = sin(ang) * (1 + rnd(4))
+    make_part(x, y, dx ,dy, 2, 15 + rnd(15), {7, 10, 9, 8, 5}, 2 + rnd(4))
   end
 end
 
 function shatter_brick(b, vx, vy)
-  if shake < 1 then
-    shake += 0.075
+  if shake < 0.5 then
+    shake += 0.07
   end
   sfx(14)
 
@@ -1354,15 +1647,103 @@ function shatter_brick(b, vx, vy)
   end
 end
 
+-->8
+------ high score ------
+
+-- reset high scores
+function reseths()
+  -- create default data
+  hs = {1000, 5000, 7500, 10000, 2500}
+  hsc.c1 = {13, 15, 23, 12, 6}
+  hsc.c2 = {1, 13, 20, 15, 1}
+  hsc.c3 = {24, 7, 6, 12, 11}
+  hsb = {true, false, false, false, false}
+  sorths()
+  savehs()
+end
+
+function resethsb()
+  for hs in all(hsb) do
+    hs = false
+  end
+
+  hsb[1] = true
+end
+
+function loadhs()
+  local slot = 0
+
+  if dget(0) == 1 then
+    -- load data
+    slot += 1
+    for i = 1, 5 do
+      hs[i] = dget(slot)
+      hsc.c1[i] = dget(slot + 1)
+      hsc.c2[i] = dget(slot + 2)
+      hsc.c3[i] = dget(slot + 3)
+
+      slot += 4
+    end
+    sorths()
+  else
+    -- file is empty
+    reseths()
+  end
+end
+
+function savehs()
+  local slot
+  -- proof that list is not empty
+  dset(0, 1)
+
+  -- save data
+  slot = 1
+  for i = 1, 5 do
+    dset(slot, hs[i])
+    dset(slot + 1, hsc.c1[i])
+    dset(slot + 2, hsc.c2[i])
+    dset(slot + 3, hsc.c3[i])
+    slot += 4
+  end
+end
+
+function sorths()
+  for i = 1, #hs do
+    local j = i
+    while j > 1 and hs[j - 1] < hs[j] do
+      hs[j], hs[j - 1] = hs[j - 1], hs[j]
+      hsc.c1[j], hsc.c1[j - 1] = hsc.c1[j - 1], hsc.c1[j]
+      hsc.c2[j], hsc.c2[j - 1] = hsc.c2[j - 1], hsc.c2[j]
+      hsc.c3[j], hsc.c3[j - 1] = hsc.c3[j - 1], hsc.c3[j]
+      hsb[j], hsb[j - 1] = hsb[j - 1], hsb[j]
+      j -= 1
+    end
+  end
+end
+
+function addhs(sc, c1, c2, c3)
+  add(hs, sc)
+  add(hsc.c1, c1)
+  add(hsc.c2, c2)
+  add(hsc.c3, c3)
+
+  for i = 1, #hsb do
+    hsb[i] = false
+  end
+
+  add(hsb, true)
+  sorths()
+end
+
 __gfx__
-00000000277777777717777777775aa55aa55a377777777757777777777777777777000000000000000000000000000000000000000000000000000011001100
-000000002eeeeeeee71cccccccc799009900993bbbbbbbb756dd66dd677777777777000000000000000000000000000000000000000000000000000010011001
-007007002eeeeeeee71cccccccc790099009903bbbbbbbb75dd66dd6677777777777000000000000000000000000000000000000000000000000000000110011
-000770002eeeeeeee71cccccccc700990099003bbbbbbbb75d66dd66d77777777777000000000000000000000000000000000000000000000000000001100110
-00077000222222222711111111170440044004333333333755555555577777777777000000000000000000000000000000000000000000000000000011001100
-00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010011001
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000110011
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001100110
+00000000277777777717777777775aa55aa55a377777777757777777777777777777000000000000000000000000000000000000000000000000000000000011
+000000002eeeeeeee71cccccccc799009900993bbbbbbbb756dd66dd677777777777000000000000000000000000000000000000000000000000000000001100
+007007002eeeeeeee71cccccccc790099009903bbbbbbbb75dd66dd6677777777777000000000000000000000000000000000000000000000000000000010000
+000770002eeeeeeee71cccccccc700990099003bbbbbbbb75d66dd66d77777777777000000000000000000000000000000000000000000000000000000001100
+00077000222222222711111111170440044004333333333755555555577777777777000000000000000000000000000000000000000000000000000000010000
+00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011100000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000001
 0a7000000ef000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 aaa70000eeef00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 9aaa00002eee00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1426,11 +1807,11 @@ __sfx__
 0108000024344283352635429355283542b3550030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 0108000028055285402f0552f54027055275402f0552f54028035285202f0352f52027025275102f0252f51000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010400003d6302d630206301c6301562013615106240f6150e6140d6150d614006000060000600006000060000600006000060000600006000060000600006000060000600000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0106000026550290502b5502d0503055026534290352b5342d0353053426515290142b5152d014305150000500000000000000000000000000000000000000000000000000000000000000000000000000000000
+01020000185501a550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010800000305000000030520305203052000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010200002455026550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0001000003610056100a6100a6100c6100f6101161013610166101661018610186101b6101b6101b6201d6201d6201d6201d6201d6201d6201d6201d6201d6201d6101b6101b61016610166100f6100a61003610
 01100000071760010000100131551515517155101550c1420c1320c1220c112001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1445,6 +1826,3 @@ __sfx__
 01100000047300473004730047300473204732047320473207730077300773007730077320773207732077320e7300e7300e7300e7300e7320e7320e7320e7320973009730097300973009732097320973209732
 01100000030530c000000000000003053000000000000000030530000000000000000305300000000000000003053000000000000000030530000000000000000305300000000000000003053000000000000000
 000e0000187001a700197001b7001c700187001c700197001d7002170022700237002470025700267002770028700297002a7002b7002c7002d7002e7002f7003070000000000000000000000000000000000000
-__music__
-03 1f201e44
-
