@@ -3,16 +3,13 @@ version 16
 __lua__
 ------ comments ------
 -- todo
+-- 10.  better collisions
 -- 11.  level design
--- 13.  particles strikes back
---------- text boxes
---------- main menu bg scroll
 -- 13.  sounds
 --------- level over fanfare
 --------- high score screen music
 --------- start screen music  
--- 14.  better collisions
--- 15.  gameplay tweaks
+-- 14.  gameplay tweaks
 --------- timer
 --------- smaller paddle ?
 
@@ -79,12 +76,12 @@ function _init()
     "b9b2/x1p9",
     "b9b2/b9b2/b9b2",
     "x5b1x5/x3s5x3",
+    "x5b",
     "b9b2/b9b2/x9x2/x1i9",
-    "x5b"
   }
-  level = 7
+  level = 3
   
-  lives = 3
+  lives = 1
   score = 0
   mult = 1
 
@@ -140,6 +137,9 @@ function _init()
   --sash
   sash = {} 
 
+  -- start screen
+  logo_ox = 0
+  logo_oy = 0
   start_parts()
 end
 
@@ -153,6 +153,7 @@ function start()
   balls = {}
   bricks = {}
   powups = {}
+  parts = {}
   chain = 1
   shake = 0
 
@@ -160,7 +161,7 @@ function start()
   build_bricks(levels[level], brick_w, brick_h, brick_offset)
 
   -- level begin sash
-  show_sash("stage "..level, 0, 6)
+  show_sash("stage "..level, 12, 1)
 
   -- reset game
   serve_ball()
@@ -192,7 +193,7 @@ end
 
 function levelover()
   scene = "leveloverwait"
-  go_cd = 30
+  go_cd = 15
 end
 
 function wingame()
@@ -498,6 +499,16 @@ end
 
 function update_start()
   part_timer += 1
+  if part_timer % 60 == 0 then
+    logo_ox = -2 + flr(rnd(3))
+    logo_oy = -2 + flr(rnd(3))
+  else
+    logo_ox = 0
+    logo_oy = 0
+  end
+
+  logo_ox = mid(-2, logo_ox, 2)
+  logo_oy = mid(-2, logo_oy, 2)
 
   spawn_bg_parts(true, part_timer)
 
@@ -546,6 +557,8 @@ function update_start()
 end
 
 function update_gameover()
+  spawn_sash_smoke(43, 86, {8, 8, 2}, 120)
+
   menu_blink_speed = 20
   if go_cd < 0 then
     if (btnp(5)) then
@@ -584,9 +597,11 @@ function update_leveloverwait()
 end
 
 function update_levelend()
+  spawn_sash_smoke(43, 86, {12, 12, 1}, 120)
+
+  menu_blink_speed = 20
   if go_cd < 0 then
     if (btnp(5)) then
-      menu_blink_speed = 20
       go_cd = go_transition
       sfx(15)
     end
@@ -725,9 +740,6 @@ function draw_game()
   draw_ui()
   shake_screen()
 
-  for part in all(parts) do
-    part:draw()
-  end
 
   for ball in all(balls) do
     ball:draw()
@@ -742,6 +754,7 @@ function draw_game()
   for pow in all(powups) do
     pow:draw()
   end
+  draw_parts()
 
   sash:draw()
 end
@@ -754,15 +767,13 @@ function draw_start()
   local hs_hide = "➡️ hide scores"
   cls()
 
-  for part in all(parts) do
-    part:draw()
-  end
+  draw_parts()
 
-  spr(69, 36 + (hs_x - 128), 12, 7, 5)
+  spr(69, 36 + logo_ox + (hs_x - 128), 12 + logo_oy, 7, 5)
   --print(title, 64 - (#title / 2) * 4, 16, 8)
   print(subtitle, 64 - (#subtitle / 2) * 4, 120, 1)
   print(cta, 64 - (#cta / 2) * 4, 100, blink_text(menu_blink_speed, {1, 12}))
-  print(hs_show, (64 - (#hs_show / 2) * 4) + (hs_x - 128), 64, 14)
+  print(hs_show, (64 - (#hs_show / 2) * 4) + (hs_x - 128), 64, 8)
   print(hs_hide, (64 - (#hs_hide / 2) * 4) + (hs_x), 16, 6)
 
   drawhs(hs_x)
@@ -773,22 +784,22 @@ function draw_gameover()
   local go_text = "game over !"
   local score_text = "your score: "..score
   local cta = "press ❎ to try again"
-  rectfill(-8, 30, 128, 72, 0)
-  rect(-8, 30, 128, 72, 6)
-  print(go_text, 64 - (#go_text / 2) * 4, 38, 8)
-  print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
-  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {0, 6}))
+  draw_game()
+  rectfill(-8, 43, 128, 85, 8)
+  print(go_text, 64 - (#go_text / 2) * 4, 48, 0)
+  print(score_text, 64 - (#score_text / 2) * 4, 56, 2)
+  print(cta, 64 - (#cta / 2) * 4, 72, blink_text(menu_blink_speed, {2, 0}))
 end
 
 function draw_levelend()
   local lo_text = "stage clear !"
   local cta = "press ❎ to continue"
   local score_text = "your score: "..score
-  rectfill(-8, 30, 128, 72, 0)
-  rect(-8, 30, 128, 72, 6)
-  print(lo_text, 64 - (#lo_text / 2) * 4, 38, 11)
-  print(score_text, 64 - (#score_text / 2) * 4, 46, 7)
-  print(cta, 64 - (#cta / 2) * 4, 60, blink_text(menu_blink_speed, {0, 6}))
+  draw_game()
+  rectfill(-8, 43, 128, 85, 12)
+  print(lo_text, 64 - (#lo_text / 2) * 4, 48, 7)
+  print(score_text, 64 - (#score_text / 2) * 4, 56, 1)
+  print(cta, 64 - (#cta / 2) * 4, 72, blink_text(menu_blink_speed, {1, 6}))
 end
 
 function draw_winscreen()
@@ -834,6 +845,7 @@ function draw_winscreen()
     end
   else
     -- won but score not high enough
+    cta = "press ❎ to continue"
     print(score_text, 64 - (#score_text / 2) * 4, 48, 8)
     print(nohs_text, 64 - (#nohs_text / 2) * 4, 64, 6)
     print(nohs_text2, 64 - (#nohs_text2 / 2) * 4, 72, 6)
@@ -862,15 +874,21 @@ function drawhs(x)
   for i = 1, 5 do
     local hst = "high scores"
     local hscol = 7
-    if (hsb[i]) hscol = blink_text(menu_blink_speed, {2, 14})
+    if (hsb[i]) hscol = blink_text(menu_blink_speed, {2, 8})
     local name = hschars[hsc.c1[i]]..hschars[hsc.c2[i]]..hschars[hsc.c3[i]]
-    rectfill(x + 32, 32, x + 98, 44, 14)
+    rectfill(x + 32, 32, x + 98, 44, 8)
     print(hst, x + 66 - (#hst / 2) * 4, 36, 0)
     -- rank + name
     print(i.."    "..name, x + 32, 44 + (i * 8), hscol)
     -- score
     local score = " "..hs[i]
     print(score, x + 100 - (#score * 4), 44 + (i * 8), hscol)
+  end
+end
+
+function draw_parts()
+  for part in all(parts) do
+    part:draw()
   end
 end
 -->8
@@ -1424,7 +1442,7 @@ function make_part(x, y, dx, dy, t, mage, colors, size)
     dy = dy,
     t = t,
     colors = colors,
-    c = 0,
+    c = colors[1],
     age = 0,
     mage = mage,
     rot = 0,
@@ -1537,6 +1555,7 @@ function show_sash(_t, _c, _tc)
 
         -- animate width
         if self.delay_w > 0 then
+          spawn_sash_smoke(64 - self.w, 64 + self.w, {_c, _c, 5}, 60)
           self.delay_w -= 1
         else
           self.w += (self.dw - self.w) / 4
@@ -1757,6 +1776,14 @@ function spawn_explosion(x, y)
     local dx = sin(ang) * (1 + rnd(4))
     make_part(x, y, dx ,dy, 2, 15 + rnd(15), {7, 10, 9, 8, 5}, 2 + rnd(4))
   end
+end
+
+function spawn_sash_smoke(ty, by, colors, time)
+  local ang = rnd()
+  local dy = cos(ang) * rnd(1)
+  local dx = sin(ang) * rnd(1)
+  make_part(flr(rnd(128)), ty, dx ,dy, 2, time + rnd(15), colors, 4 + rnd(6))
+  make_part(flr(rnd(128)), by, dx ,dy, 2, time + rnd(15), colors, 4 + rnd(6))
 end
 
 function shatter_brick(b, vx, vy)
