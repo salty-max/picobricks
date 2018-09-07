@@ -3,8 +3,8 @@ version 16
 __lua__
 ------ comments ------
 -- todo
--- 10.  better collisions
 -- 11.  level design
+-- 12. ramming pad bug fix
 -- 13.  sounds
 --------- level over fanfare
 --------- high score screen music
@@ -12,6 +12,7 @@ __lua__
 -- 14.  gameplay tweaks
 --------- timer
 --------- smaller paddle ?
+--------- reduce points
 
 -- brick types
 -- b -> regular
@@ -66,22 +67,21 @@ function _init()
   scene = "start"
   debug = ""
 
+  screenbox = {
+    left = 127,
+    right = 0,
+    top = 140,
+    bottom = 7
+  }
+
   parts = {}
   part_timer = 0
   part_row = 0
 
-  levels = {
-    "b3xb3xb3/xbxxh1b1h1xxbx/xpxxh1s1h1xxpx/b1h1b1xb3xb1h1b1",
-    "x5b1x5/sbsbsbsbsbs",
-    "b9b2/x1p9",
-    "b9b2/b9b2/b9b2",
-    "x5b1x5/x3s5x3",
-    "x5b",
-    "b9b2/b9b2/x9x2/x1i9",
-  }
-  level = 3
+  levels = load_levels()
+  level = 11
   
-  lives = 1
+  lives = 3
   score = 0
   mult = 1
 
@@ -161,10 +161,74 @@ function start()
   build_bricks(levels[level], brick_w, brick_h, brick_offset)
 
   -- level begin sash
-  show_sash("stage "..level, 12, 1)
+  show_sash(level.." - "..levels[level].label, 12, 1)
 
   -- reset game
   serve_ball()
+end
+
+function load_levels()
+  return {
+    -- 1
+    { label = "warm up", layout = "///b9bb9bbbpbbpbbpbbb9bb9b" },
+
+    -- 2
+    { label = "stairway to heaven", layout = "/b/bb/bbp/b3/b4/b4p/b6/bsb5/b7p/h9s" },
+
+    -- 3
+    { label = "twin towers", layout = "//xbbbhxbbbhxxbphbxbphbxxbhpbxbhpbxxhbbbxhbbbxxbbbbxbbbbxxbbbhxbbbhxxbphbxbphbxxbhpbxbhpbxxhbbbxhbbbx" },
+
+    -- 4
+    { label = "get inside", layout = "pi//xi/xixxxhh/xixxhbbh/xixhpbbph/xixhbssbh/xixxhbbh/xixxxhh/xi/xi/xi/si9" },
+
+    -- 5
+    { label = "three burgers", layout = "///b9bpbbpbbbpbbp/bbhxhbhxhbbbbhxhbhxhbbbbhxhbhxhbb/pbbpbbbpbbpb9b" },
+
+    -- 6
+    { label = "arrow in the knee", layout = "/xxxxxh/xxxbbxbb/xbbxxhxxbbxbxxbpxpbxxbxbbxxhxxbbxbxxbbxbbxxbxbpxxhxxpbxbxxbpxpbxxbxbbxxhxxbbxbxxbbxbbxxbxbbxxxxxbbxbxxxxxxxxxb" },
+
+    -- 7
+    { label = "cups high", layout = "/xixixxxixixxibixxxibixxisixxxisixxiiixxxiiix/xxxbbpbb/xxxbbbbb/xxxpbpbp/xxxbbbbb/xxxbbpbb/" },
+
+    -- 8
+    { label = "maze", layout = "i9ix3ix4ixipxixxxxxixixxixxixxixixxipxixxixixpixxixxixixxixxixxixixxixpixxixipxxxxixxixixxxxxixsixi9" },
+
+    -- 9
+    { label = "mellow center", layout = "/ph8phx8hhxhhhphhhxhhxhxxxxxhxhhxhxhhhxhxhhxpxhshxpxhhxhxhhhxhxhhxhxxxxxhxhhxh6xhpx8ph9h" },
+
+    -- 10
+    { label = "oreo", layout = "///xi8xxbbpbbbpbbxxbbbbbbbbbxxpbbbpbbbpxxbbbbbbbbbxxbbpbbbpbbxxi8x" },
+
+    -- 11
+    { label = "border wall", layout = "/bbbsbbbsbbbpxxxxxxxxxpb9b/hiiiiiiiiihpxxxxpxxxxphiiiiiiiiih/bbpbbbbbpbbpxxxxxxxxxpb9b" },
+
+    -- 12
+    { label = "lungs", layout = "///bbbpixipbbbiibiixiiibibbbpixipbbbbbbbixibbbbihiiixiiihibbbpixipbbbbbbbixibbbb" },
+
+    -- 13
+    { label = "clogged lanes", layout = "//pxpxpxpxpxpbxbxbxbxbxbbxbxbxbxbxbbxbxbxbxbxbbxisisisixbbxbxbxbxbxbbxbxbxbxbxbsxixsxsxixsbxbxbxbxbxb" },
+
+    -- 14
+    { label = "diagonal", layout = "///sb/bbbb/bbbbbbb/pbbbbbbbb/bbpbbbbbbbsihbbpbpbbbbxxihbbbbpbbxxxxihibbbpxxxxxxxhibbxxxxxxxxxhi" },
+
+    -- 15
+    { label = "energy core", layout = "//xibpbpbpbixxixxxxxxxixxixxxxxxxixxixiiiiixixxixibsbixixxixibbbixixxixibpbixixxixxxxxxxixxixxxxxxxixxiiiiiiiiix" },
+
+    -- 16
+    { label = "shelves", layout = "//xbxbxpxbxbxxixixixixixpxbxbxbxbxpixixixixixixbxpxsxpxbxxixixixixixbxbxbxbxbxbixixixixixixpxbxpxbxpxxixixixixix" },
+
+    -- 17
+    { label = "inner sanctum", layout = "//xxxxbpb/xbpbihibpbxbihixxxihibbixxxxxxxibpibxxsxxbipbibxxxxxbibxbibxxxbibxxbibbbbbibxxxbibbbib/xxxbihib/" },
+
+    -- 18
+    { label = "cells", layout = "/isixisixisiipixipixipiiiixiiixiii/isixisixisiipixipixipiiiixiiixiii/isixisixisiipixipixipiiiixiiixiii" },
+
+    -- 19
+    { label = "ode to sonic", layout = "/xiixixixiixxixxxxxxxixxxxixxxi/xxxxxp/ixixihixixixxxxxb/xixixbxixixxxxxxb/xiixihixiixxixxxpxxxixxxxixxxi/xxixixixi" },
+
+    -- 20 (bonus)
+    { label = "invaders must die", layout = "xxsxxxxxs/xxsxxxxxs/xxxsxxxs/xxxbbbbbxxxxxbbbbbbbxxxbbbbbbbbbxxbbpbbbpbbxxbbbbbbbbbxxbbbbbbbbbxxbxbxxxbxbxxbxbxxxbxbxxxxxbxb/" },
+  }
 end
 
 function islevelfinished()
@@ -221,7 +285,7 @@ function serve_ball()
   balls[1].vy = -1
   balls[1].a = 1
   balls[1].stuck = true
-  balls[1].sticky_x = flr(pad.w / 2)
+  balls[1].sticky_x = 0
 
   chain = 1
   powerup = ""
@@ -233,12 +297,13 @@ function build_bricks(lvl, w, h, o)
   local i, j, k, id, chr, last
   j = 0
   id = 0
+  bricks = {}
 
-  for i = 1,#lvl do
+  for i = 1, #lvl.layout do
     j += 1
     id += 1
     -- extract current character from level string
-    chr = sub(lvl, i, i)
+    chr = sub(lvl.layout, i, i)
     -- check for bricks characters
     if chr == "b" or chr == "h" or chr =="i" or chr == "s" or chr == "p" then
       last = chr
@@ -247,11 +312,11 @@ function build_bricks(lvl, w, h, o)
     elseif chr == "x" then
       last = "x"
     -- check for line breaks
-    elseif chr == '/' then
-      j = flr((j - 1) / 11) * 11
+    elseif chr == "/" then
+      j = (flr((j - 1) / 11) + 1) * 11
     -- create n bricks of last character type
-    elseif chr >= "0" and chr <= "9" then
-      for k = 1,tonum(chr) - 1 do
+    elseif chr >= "1" and chr <= "9" then
+      for k = 1, chr do
         set_brick(id, last, j, w, h, o)
         j += 1
         id += 1
@@ -267,7 +332,7 @@ function set_brick(id, t, n, w, h, o)
   if t == "x" then
     -- do nothing
   else
-    add(bricks, make_brick(id, 4 + ((n - 1) % 11) * (w + o), 20 + flr((n - 1) / 11) * (h + o), w, h, t))
+    add(bricks, make_brick(id, 4 + ((n - 1) % 11) * (w + o), 12 + flr((n - 1) / 11) * (h + o), w, h, t))
   end
 end
 
@@ -289,59 +354,6 @@ function handle_score()
   print("x"..chain, 60, 2, chain_color)
   -- score
   print("score: "..score, 72, 2, 6)
-end
-
-function hit_brick(b, ball, combo)
-  -- check brick type on hit and apply behavior based on it
-
-  local flash_t = 8
-  b.ox = ball.vx
-  b.oy = ball.vy
-
-  if b.t == "b" then
-    sfx(3 + (chain - 1))
-    if combo then
-      score += (b.pts * chain) * mult
-      boost_combo()
-    end
-    b.flash = flash_t
-    b.v = false
-    shatter_brick(b, lasthit_x, lasthit_y)
-  elseif b.t == 's' then
-    b.t = "rex"
-    sfx(3 + (chain - 1))
-    --shatter_brick(b, lasthit_x, lasthit_y)
-    if combo then
-      score += (b.pts * chain) * mult
-      boost_combo()
-    end
-  elseif b.t == "h" then
-    if powerup == "meg" then
-      if combo then
-        score += (b.pts * chain) * mult
-        chain += 1
-        chain = mid(1, chain, 8)
-      end
-      b.flash = flash_t
-      b.v = false
-      shatter_brick(b, lasthit_x, lasthit_y)
-    else
-      b.t = "b"
-    end
-    sfx(3 + (chain - 1))
-  elseif b.t == "i" then
-    sfx(11)
-  elseif b.t == "p" then
-    sfx(3 + (chain - 1))
-    if combo then
-      score += (b.pts * chain) * mult
-      boost_combo()
-    end
-    b:spawn_pill()
-    b.flash = flash_t
-    b.v = false
-    shatter_brick(b, lasthit_x, lasthit_y)
-  end
 end
 
 function boost_combo()
@@ -378,20 +390,10 @@ function explode_bricks(b)
     -- explosion spread management
     for brick in all(bricks) do
       if brick.id != b.id and brick.v and abs(brick.x - b.x) <= brick.w + 1 and abs(brick.y - b.y) <= brick.h + 1 then
-        hit_brick(brick, ball, false)
+        b:hit(ball, false)
       end
     end
   end
-end
-
-function collide(a, b)
-  -- check for collision between two rectangle hitboxes
-  if (a.x > b.x + b.w) return false 
-  if (a.x + a.w < b.x) return false 
-  if (a.y > b.y + b.h) return false 
-  if (a.y + a.h < b.y) return false 
-
-  return true
 end
 
 function copyball(ob)
@@ -419,6 +421,31 @@ function multiball()
   end
 
   add(balls, cb)
+end
+
+function intercept(_x1, _y1, _x2, _y2, _x3, _y3, _x4, _y4, _d)
+  denom = ((_y4 - _y3) * (_x2 - _x1)) - ((_x4 - _x3) * (_y2 - _y1))
+  if denom != 0 then
+    ua = (((_x4 - _x3) * (_y1 - _y3)) - ((_y4 - _y3) * (_x1 - _x3))) / denom
+    if ua >= 0 and ua <= 1 then
+      ub = (((_x2 - _x1) * (_y1 - _y3)) - ((_y2 - _y1) * (_x1 - _x3))) / denom
+      if ub >= 0 and ub <= 1 then
+        _x = _x1 + (ua * (_x2 - _x1))
+        _y = _y1 + (ua * (_y2 - _y1))
+
+        return { x = _x, y = _y, d = _d }
+      end
+    end
+  end
+
+  return nil
+end
+
+function dist(x1, y1, x2, y2)
+  local dx = x1 - x2
+  local dy = y1 - y2
+  
+  return sqrt(dx * dx + dy * dy)
 end
 
 -->8
@@ -916,6 +943,7 @@ function make_ball()
         self.x = pad.x + self.sticky_x
         self.y = pad.y - self.r - 1
       else
+
         -- ball movement
         if powerup == "spd" then
           nextx = self.x + (self.vx / 2)
@@ -925,132 +953,106 @@ function make_ball()
           nexty = self.y + self.vy
         end
 
-        -- make ball bounce off screen boundaries
-        if nextx <= 0  or nextx >= 127 then
-          nextx = mid(0, nextx, 127)
-          self.vx = -self.vx
-          sfx(0)
-          spawn_pufft(nextx, nexty)
-        end
-        if nexty <= 8 + self.r then 
-          nexty = mid(0, nexty, 127)
-          self.vy = -self.vy
-          sfx(0)
-          spawn_pufft(nextx, nexty)
+        local cols = {}
+        local megacols = {}
+        local tmp_col = nil
+        local box
+
+        -- collision with wall
+        tmp_col = self:intercept(screenbox, nextx, nexty)
+        if tmp_col != nil then
+          tmp_col.t = "wall"
+          add(cols, tmp_col)  
         end
 
-        if self:bounce(nextx, nexty, pad) then
-          -- check if ball hits pad
-          -- find out which direction ball will deflect
-          if self:deflect(pad) then
-            -- ball hits paddle sideways
-            self.vx = -self.vx
-            if self.x < pad.x + pad.w / 2 then
-              nextx = pad.x - self.r
-            else
-              nextx = pad.x + pad.w + self.r
+        -- collision with pad
+        box = pad:get_box()
+        tmp_col = self:intercept(box, nextx, nexty)
+        if tmp_col != nil then
+          tmp_col.t = "pad"
+          add(cols, tmp_col)  
+        end
+
+        -- collision with bricks
+        for b in all(bricks) do
+          -- check if ball hits brick
+          if b.v then
+            box = b:get_box()
+            tmp_col = self:intercept(box, nextx, nexty)
+            if tmp_col != nil then
+              tmp_col.t = "brick"
+              tmp_col.brick = b
+
+              -- megaball handling
+              if powerup == "meg" and b.t != "i" then
+                add(megacols, tmp_col)
+              else
+                add(cols, tmp_col)
+              end  
             end
-          else
-            -- ball hits paddle on top / bottom
-            self.vy = -self.vy
-            if self.y > pad.y then
-              -- bottom
-              nexty = pad.y + pad.h + self.r
-            else
-              -- top
-              nexty = pad.y - self.r
-
-              if abs(pad.vx) > 2 then
-                -- change angle
-                if sgn(self.vx) == sgn(pad.vx) then
-                  -- flatten angle
-                  self:set_angle(mid(0, self.a - 1, 2))
-                else
-                  -- raise angle
-                  if (self.a == 2) self.vx = -self.vx
-                  self:set_angle(mid(0, self.a + 1, 2))  
-                end
-              end
-            end
-          end
-
-          spawn_pufft(nextx, nexty)
-          chain = 1
-          sfx(1)
-
-          -- make ball sticky
-          if pad.sticky and self.vy < 0 then
-            pad:release_ball()
-            pad.sticky = false
-            self.stuck = true
-            self.sticky_x = self.x - pad.x
           end
         end
 
-        local brick_hit = false
-        for brick in all(bricks) do 
-          if brick.v and self:bounce(nextx, nexty, brick) then
-            -- check if ball hits brick
-            -- find out which direction ball will deflect
-            if not brick_hit then
-              if (powerup == "meg" and brick.t == "i") or powerup != "meg" then
-                -- save ball momentum on impact
-                lasthit_x = self.vx
-                lasthit_y = self.vy
+        -- save ball momentum on impact
+        lasthit_x = self.vx
+        lasthit_y = self.vy
 
-                if self:deflect(brick) then
-                  -- ball hits brick sideways
-                  self.vx = -self.vx
-                  if self.x < brick.x + brick.w / 2 then
-                    nextx = brick.x - self.r
-                  else
-                    nextx = brick.x + brick.w + self.r
-                  end
-                else
-                  -- ball hits brick on top / bottom
-                  self.vy = -self.vy
-                  if self.y > brick.y then
-                    -- bottom
-                    nexty = brick.y + brick.h + self.r
-                  else
-                    -- top
-                    nexty = brick.y - self.r
-                  end
-                end
-              end
-              brick_hit = true
-
-              hit_brick(brick, self, true)
-            end
-          end
-
+        -- check if collisions occur
+        if #cols == 0 then
+          -- no collision
           self.x = nextx
           self.y = nexty
+        else
+          -- some collision
+          local col_i = 1
+          if #cols > 1 then
+            -- more than one collision
+            -- check the nearest
+            local col_dst = self:collision_dist(cols[1])
+
+            for i = 2, #cols do
+              local dst = self:collision_dist(cols[i])
+              if dst < col_dst then
+                col_dst = dst
+                col_i = i
+              end
+            end
+          end
+
+          -- deal with collision
+          self:collide(cols[col_i])
+        end
+
+        -- deal with megaball collision
+        if #megacols > 0 then
+          for i = 1, #megacols do
+            megacols[i].brick:hit(self, true)
+          end
         end
 
         -- trail particles
         --if (powerup == "meg") spawn_trail(nextx, nexty)
-        spawn_trail(nextx, nexty, 1)
-      end
+        spawn_trail(self.x, self.y, 1)
 
-      -- ball falls out of screen
-      if self.y > 127 then
-        spawn_death(self.x, self.y)
-        if #balls > 1 then
-          sfx(2)
-          shake += 0.2
-          del(balls, self)
-        else
-          if lives <= 1 then
-          gameover()
-        else
-          lives -= 1
-          sfx(2)
-          shake += 0.5
-          serve_ball()
+        -- ball falls out of screen
+        if self.y > 127 then
+          spawn_death(self.x, self.y)
+          if #balls > 1 then
+            sfx(2)
+            shake += 0.2
+            del(balls, self)
+          else
+            if lives <= 1 then
+              gameover()
+            else
+              lives -= 1
+              sfx(2)
+              shake += 0.5
+              serve_ball()
+            end
+          end
         end
-        end
-      end
+      end -- end of stuck if
     end,
 
     draw = function(self)
@@ -1075,41 +1077,106 @@ function make_ball()
       if (self.stuck) serve_preview()
     end,
 
-    -- check for collision between ball and rect hitboxes
-    bounce = function(self, nextx, nexty, other)
-      if (nexty - self.r > other.y + other.h) return false -- top
-      if (nexty + self.r < other.y) return false -- bottom
-      if (nextx - self.r > other.x + other.w) return false -- left
-      if (nextx + self.r < other.x) return false -- right
+    -- deal with different collisions
+    collide = function(self, col)
+      -- set position
+      self.x = col.x
+      self.y = col.y
 
-      return true
+      -- reflect
+      if col.d == "left" or col.d == "right" then
+        self.vx = -self.vx
+      else
+        self.vy = -self.vy
+      end
+
+      if col.t == "wall" then
+        -----------------
+        -- wall collision
+        -----------------
+        sfx(0)
+        spawn_pufft(self.x, self.y)
+      elseif col.t == "pad" then
+        ----------------
+        -- pad collision
+        ----------------
+        if abs(pad.vx) > 2 and col.d == "top" then
+          -- change angle
+          if sgn(self.vx) == sgn(pad.vx) then
+            -- flatten angle
+            self:set_angle(mid(0, self.a - 1, 2))
+          else
+            -- raise angle
+            if (self.a == 2) self.vx = -self.vx
+            self:set_angle(mid(0, self.a + 1, 2))  
+          end
+        end
+
+        -- make ball sticky
+        if pad.sticky and col.d == "top" then
+          pad:release_ball()
+          pad.sticky = false
+          self.stuck = true
+          self.sticky_x = self.x - pad.x
+        end
+
+        -- fx
+        spawn_pufft(self.x, self.y)
+        chain = 1
+        sfx(1)
+      elseif col.t == "brick" then
+        ------------------
+        -- brick collision
+        ------------------
+        col.brick:hit(self, true)
+        if (col.brick.t == "i") spawn_pufft(self.x, self.y)
+      end
     end,
 
-    -- calculate ball direction based on where it hits another entity
-    deflect = function(self, target)
-      local slp = self.vy / self.vx
-      local cx, cy
-      if self.vx == 0 then
-          return false
-      elseif self.vy == 0 then
-          return true
-      elseif slp > 0 and self.vx > 0 then
-          cx = target.x - self.x
-          cy = target.y - self.y
-          return cx > 0 and cy/cx < slp
-      elseif slp < 0 and self.vx > 0 then
-          cx = target.x - self.x
-          cy = target.y + target.h - self.y
-          return cx > 0 and cy/cx >= slp
-      elseif slp > 0 and self.vx < 0 then
-          cx = target.x + target.w - self.x
-          cy = target.y + target.h - self.y
-          return cx < 0 and cy/cx <= slp
-      else
-          cx = target.x + target.w - self.x
-          cy = target.y - self.y
-          return cx < 0 and cy/cx >= slp
+    -- return point of impact between ball and another object
+    intercept = function(self, target, nx ,ny)
+      local pt = nil
+
+      if ny < self.y then
+        pt = intercept(self.x, self.y, nx, ny,
+                        target.left - self.r,
+                        target.bottom + self.r,
+                        target.right + self.r,
+                        target.bottom + self.r,
+                        "bottom")
+      elseif ny > self.y then
+        pt = intercept(self.x, self.y, nx, ny,
+                        target.left - self.r,
+                        target.top - self.r,
+                        target.right + self.r,
+                        target.top - self.r,
+                        "top")
       end
+
+      if pt == nil then
+        if nx < self.x then
+          pt = intercept(self.x, self.y, nx, ny,
+                          target.right + self.r,
+                          target.top - self.r,
+                          target.right + self.r,
+                          target.bottom + self.r,
+                          "right")
+        elseif nx > self.x then
+          pt = intercept(self.x, self.y, nx, ny,
+                          target.left - self.r,
+                          target.top - self.r,
+                          target.left - self.r,
+                          target.bottom + self.r,
+                          "left")
+        end
+      end
+
+      return pt
+    end,
+
+    -- calculate distance between ball and collidable object
+    collision_dist = function(self, target)
+      return dist(self.x, self.y, target.x, target.y)
     end,
 
     -- calculate ball angle
@@ -1134,7 +1201,7 @@ end
 
 function make_pad()
   local pad = {
-    x = 52,
+    x = 64,
     y = 120,
     vx = 0,
     w = 24,
@@ -1168,7 +1235,7 @@ function make_pad()
       -- apply velocity
       self.x += self.vx
       -- paddle don't go offscreen
-      self.x = mid(0, self.x, 127 - self.w)
+      self.x = mid(self.w / 2, self.x, 127 - self.w / 2)
 
       -- paddle size management
       if (powerup == "exp") then
@@ -1182,11 +1249,12 @@ function make_pad()
 
     -- draw paddle based on its size
     draw = function(self)
-      sspr(0, 16, 5, 6, self.x, self.y)
-      sspr(8, 16, 5, 6, self.x + self.w - 4, self.y)
+      local px = self.x - (self.w / 2)
+      sspr(0, 16, 5, 6, px, self.y)
+      sspr(8, 16, 5, 6, px + self.w - 4, self.y)
 
       for i = 5, self.w - 5 do
-        sspr(5, 16, 1, 6, self.x + i, self.y)
+        sspr(5, 16, 1, 6, px + i, self.y)
       end
     end,
 
@@ -1205,6 +1273,15 @@ function make_pad()
           ball.vx = abs(ball.vx) * sign
         end
       end
+    end,
+
+    get_box = function(self)
+      return {
+        left = self.x - self.w / 2,
+        right = self.x + self.w / 2,
+        top = self.y,
+        bottom = self.y + self.h
+      }
     end
   }
 
@@ -1282,6 +1359,59 @@ function make_brick(id, x, y, w, h, t)
       end
     end,
 
+    -- check brick type on hit and apply behavior based on it
+    hit = function(self, ball, combo)
+
+      local flash_t = 8
+      self.ox = ball.vx
+      self.oy = ball.vy
+
+      if self.t == "b" then
+        sfx(3 + (chain - 1))
+        if combo then
+          score += (self.pts * chain) * mult
+          boost_combo()
+        end
+        self.flash = flash_t
+        self.v = false
+        shatter_brick(self, lasthit_x, lasthit_y)
+      elseif self.t == 's' then
+        self.t = "rex"
+        sfx(3 + (chain - 1))
+        --shatter_brick(self, lasthit_x, lasthit_y)
+        if combo then
+          score += (self.pts * chain) * mult
+          boost_combo()
+        end
+      elseif self.t == "h" then
+        if powerup == "meg" then
+          if combo then
+            score += (self.pts * chain) * mult
+            chain += 1
+            chain = mid(1, chain, 8)
+          end
+          self.flash = flash_t
+          self.v = false
+          shatter_brick(self, lasthit_x, lasthit_y)
+        else
+          self.t = "b"
+        end
+        sfx(3 + (chain - 1))
+      elseif self.t == "i" then
+        sfx(11)
+      elseif self.t == "p" then
+        sfx(3 + (chain - 1))
+        if combo then
+          score += (self.pts * chain) * mult
+          boost_combo()
+        end
+        self:spawn_pill()
+        self.flash = flash_t
+        self.v = false
+        shatter_brick(self, lasthit_x, lasthit_y)
+      end
+    end,
+
     -- randomly spawn powerups
     spawn_pill = function(self)
       local types = {"spd", "1up", "sty", "exp", "rdc", "meg", "mlt"}
@@ -1319,6 +1449,15 @@ function make_brick(id, x, y, w, h, t)
           end
         end
       end
+    end,
+
+    get_box = function(self)
+      return {
+        left = self.x,
+        right = self.x + self.w,
+        top = self.y,
+        bottom = self.y + self.h
+      }
     end
   }
 
@@ -1342,7 +1481,7 @@ function make_powup(t, x, y)
       -- delete pill when it exits screen
       if (self.y >= 128) del(powups, self)
 
-      if collide(self, pad) then
+      if self:collide_pad(pad.x - pad.w / 2, pad.y, pad.w, pad.h) then
         self:activate()
         spawn_colored_smoke(self.x, self.y, self.c)
         sfx(12)
@@ -1380,6 +1519,15 @@ function make_powup(t, x, y)
       palt()
     end,
 
+    collide_pad = function(self, px, py, pw, ph)
+      -- check for collision between two rectangle hitboxes
+      if (self.x > px + pw) return false 
+      if (self.x + self.w < px) return false 
+      if (self.y > py + ph) return false 
+      if (self.y + self.h < py) return false 
+
+      return true
+    end,
 
     -- set active powerup type, and duration
     activate = function(self)
