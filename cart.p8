@@ -12,7 +12,16 @@ __lua__
 -- 14.  gameplay tweaks
 --------- timer
 --------- smaller paddle ?
---------- reduce points
+--------- reduce gives points
+--------- tougher hardened blocks
+-- 15.  lost ball
+-- 16.  infinite ball protection
+-- 17.  visual stuff
+--------- sticky aura
+--------- pad speedlines
+--------- ball twist
+-- 18.  arcade mode
+-- 19. randomized combo text
 
 -- brick types
 -- b -> regular
@@ -79,7 +88,7 @@ function _init()
   part_row = 0
 
   levels = load_levels()
-  level = 11
+  level = 1
   
   lives = 3
   score = 0
@@ -482,6 +491,14 @@ end
 
 function update_game()
   check_explosions()
+
+  if btnp(4) then
+    if level == #levels then
+      scene = "winscreen"
+    else
+      nextlevel()
+    end
+  end
 
   powupbar_w = 100 / powerup_t 
 
